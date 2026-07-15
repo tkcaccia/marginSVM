@@ -3,143 +3,97 @@
 [![R CMD check](https://github.com/tkcaccia/marginSVM/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/tkcaccia/marginSVM/actions/workflows/R-CMD-check.yaml)
 [![pkgdown](https://github.com/tkcaccia/marginSVM/actions/workflows/pkgdown.yaml/badge.svg)](https://github.com/tkcaccia/marginSVM/actions/workflows/pkgdown.yaml)
 
-The `SpatialGraphRefine` R package provides two complementary post-processors for noisy 2D and
-3D tissue-domain assignments. `refine_spatial_svm()` implements marginSVM
-(Multiscale Adaptive Refinement with Graph-Integrated Nyström SVM), built around
-a structured C++ multiclass engine with cross-fitted Nyström
-features, overlapping tiles, multiple tissues, and multicore execution.
-`refine_spatial_clusters()` retains
-the conservative kNN-graph alternative for locally isolated errors.
+`marginSVM` refines noisy spatial cluster assignments without rerunning the
+upstream clustering method. It uses coordinates and labels, with an optional
+tissue identifier for datasets containing multiple sections. The C++ engine
+combines overlapping local Nystrom SVMs, graph evidence, and edge-aware
+total-variation decoding.
 
-The usual workflow has only two required inputs:
-
-## Install locally
+## Installation
 
 ```r
-install.packages("Rcpp")
-remotes::install_github("tkcaccia/marginSVM")
+install.packages("remotes")
+remotes::install_github("tkcaccia/marginSVM", build_vignettes = TRUE)
 ```
 
-For development from a local checkout:
-
-```sh
-R CMD INSTALL .
-```
-
-## Example
+## Basic use
 
 ```r
-library(SpatialGraphRefine)
+library(marginSVM)
 
 sim <- simulate_gradient_regions(
-  50000, minority = 0.25, samples = 2, density_profile = "strong"
+  n = 50000,
+  minority = 0.25,
+  samples = 2,
+  density_profile = "strong"
 )
-refined <- refine_spatial_svm(sim$xy, sim$labels, sim$samples)
+
+refined <- refine_spatial_svm(
+  sim$xy,
+  sim$labels,
+  samples = sim$samples
+)
 
 mean(sim$labels == sim$truth)
 mean(refined == sim$truth)
-table(sim$area, refined)
 ```
 
-## Large tiled datasets
+Only `xy` and `labels` are required. Tiling, overlap, local models, graph fusion,
+and decoding are automatic. Each value of `samples` is processed independently.
 
-Large SVM inputs are partitioned automatically into prediction cores with
-overlapping training halos:
+## Large datasets and backends
+
+Large 2D and 3D inputs are automatically divided into overlapping tiles. CPU
+tile models use up to four physical cores by default; the worker count can be
+limited directly:
 
 ```r
-refined <- refine_spatial_svm(xy, labels, samples)
+refined <- refine_spatial_svm(xy, labels, samples, workers = 8)
 ```
 
-Every tissue is partitioned independently. Automatic execution combines regular
-spatial tiles with adaptive boundary-rich tiles targeting about 5,000 core
-observations. Cross-fitted local models return continuous multiclass scores, which
-are blended across overlapping halos and reconciled by edge-aware total variation.
-High-cardinality annotations also use topology-aware abstention for coherent label
-regions that cannot be identified as errors from coordinates alone.
-
-An opt-in high-class extension adds anisotropic multiscale neighborhoods,
-pairwise boundary SVMs, a continuous trust field, pointwise
-retain/change/unresolved decisions, and stability-based rare-region protection:
+The built-in backend is C++ CPU. Optional CUDA or Metal providers can implement
+the same score contract:
 
 ```r
-refined_v2 <- refine_spatial_svm(
-  xy, labels, samples,
-  control = list(experimental_v2 = 1)
-)
-attr(refined_v2, "decision")
-attr(refined_v2, "trust")
+spatial_svm_backend_capabilities()
+refined <- refine_spatial_svm(xy, labels, samples, backend = "auto")
 ```
 
-The extension improved the frozen 19-class colorectal confirmation but not a
-mixed 2D/3D geometry block, so v1 remains the general default.
+No native GPU performance claim is made by this release.
+
+## Diagnostics
+
+The returned factor preserves the original label levels. Compact diagnostics are
+stored as attributes:
 
 ```r
-control <- list(
-  overlap = 0.25,
-  target_tile_size = 5000,
-  workers = 6
-)
-refined <- refine_spatial_svm(xy, labels, samples, control = control)
+attr(refined, "confidence")
+attr(refined, "margin")
+attr(refined, "local_support")
+attr(refined, "tiles")
+attr(refined, "abstained_samples")
 ```
 
-The default 25% halo, 48-landmark, 8-epoch, 24-iteration profile was frozen after
-paired tuning and checked on 560 independent simulated scenarios. It was 1.68-fold
-faster overall and 1.80-fold faster in the 19-class subset than the previous
-40%/64/10/40 profile. Four CPU workers processed 500,000 points in 6.19 seconds in
-2D and 10.14 seconds in 3D on the benchmark machine.
+See the package vignette for visual examples and a Seurat workflow:
 
-`spatial_svm_backend_capabilities()` reports available structured-SVM backends.
-CPU is built in. CUDA and Metal implementations can register through
-`register_spatial_svm_backend()`. An unavailable requested accelerator warns and
-uses CPU. Tile fitting uses a portable native C++ thread pool.
+```r
+vignette("marginSVM", package = "marginSVM")
+```
 
-## Benchmark
+## Validation
 
-The complete simulation matrix covers all eleven geometric structures, layered
-A-B-B-C gradients, five region-concentration profiles, four error mechanisms,
-2D/3D coordinates, and single/multiple tissues:
+The manuscript evaluates 708 simulations spanning eleven geometries, 2D/3D
+layered gradients, five region-density profiles, four error mechanisms, and one
+or three tissues. It also reports controlled label-corruption experiments on
+194,541 measured locations and 19 biological annotation classes from a real
+VisiumHD colorectal tissue.
+
+The complete benchmark and manuscript statistics are regenerated with:
 
 ```sh
 Rscript benchmarks/marginsvm_complete_simulation_benchmark.R
 Rscript benchmarks/analyze_complete_simulation_for_manuscript.R
 ```
 
-For the frozen synthetic study and manuscript figures:
-
-```sh
-Rscript benchmarks/reviewer_response_experiments.R
-Rscript benchmarks/svm_gradient_benchmark.R
-Rscript benchmarks/reviewer_additional_experiments.R
-Rscript benchmarks/run_scaling.R
-Rscript benchmarks/summarize_manuscript_results.R
-```
-
-These scripts write raw CSV metrics and publication PNG figures to
-`benchmarks/results/reviewer_response/`, including:
-
-- 1,120 held-out combinations of ten geometries, four noise mechanisms, four
-  corruption fractions, and seven confirmatory seeds;
-- published SpaGCN and GraphST label refiners, C++ kNN, Potts-like ICM, and
-  image-morphology comparators;
-- rare-domain, thin-layer, boundary, anisotropy, duplicate-coordinate, and
-  irregular-density stress tests;
-- rotation, translation, row-order, label-permutation, and multi-sample checks;
-- CPU runtime and peak memory through 500,000 observations in 2D and 3D.
-- layered A-B-B-C gradient mixtures at 5--40%, in 2D/3D and one/three tissues.
-- a held-out multiscale SVM study across gradient mixtures and five nonlinear
-  geometric families, including visual border comparisons.
-
-The manuscript includes disjoint synthetic seeds and a third untouched
-60-scenario seed block using a real 19-class colorectal VisiumHD tissue with
-controlled semi-synthetic label corruption. Independent tissues remain reserved
-for cross-cohort external validation.
-
-See `docs/literature_benchmark_notes.md` for related tools and benchmark papers.
-
-## Implementation scope
-
-The graph refiner uses an exact CPU kd-tree. The structured SVM uses boundary-
-enriched Nyström features, robust two-fold multiclass hinge optimization,
-uncertainty-gated graph evidence, and primal-dual TV decoding in C++. CUDA and
-Metal providers are supported by contract; this release makes no GPU performance
-claim.
+The [project site](https://tkcaccia.github.io/marginSVM/) contains the function
+reference, vignettes, benchmark summary, and manuscript.

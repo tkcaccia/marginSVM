@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-suppressPackageStartupMessages(library(SpatialGraphRefine))
+suppressPackageStartupMessages(library(marginSVM))
 args <- commandArgs(trailingOnly = TRUE)
 n <- as.integer(args[1L])
 dimensions <- as.integer(args[2L])
@@ -12,7 +12,7 @@ sim <- simulate_spatial_domains(
   density_profile = "uniform", seed = seed
 )
 invisible(gc())
-timing <- system.time(refined <- refine_spatial_svm(
+timing <- system.time(refined <- marginSVM:::.refine_spatial_svm_engine(
   sim$xy, sim$labels, sim$samples,
   control = list(workers = workers, seed = seed + 100000L)
 ))

@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 
 suppressPackageStartupMessages({
-  library(SpatialGraphRefine)
+  library(marginSVM)
   library(dplyr)
   library(tidyr)
   library(ggplot2)
@@ -13,7 +13,7 @@ workers <- max(1L, as.integer(Sys.getenv("SPATIAL_REFINE_BENCHMARK_WORKERS", "4"
 patterns <- c("jagged_stripes", "wavy_layers", "rings", "spiral", "branching",
               "lobes", "islands", "disconnected", "thin_layers", "intermixed",
               "layers3d")
-methods <- c("Initial", "marginSVM", "marginSVM trust field", "Graph refinement",
+methods <- c("Initial", "marginSVM", "Graph refinement",
              "SpaGCN refine", "GraphST refine", "C++ kNN vote", "Potts-like ICM")
 design <- tidyr::crossing(
   pattern = patterns,
@@ -51,22 +51,20 @@ run_one <- function(index) {
     density_profile = d$density_profile, seed = 2100000L + index
   )
   fns <- list(
-    "marginSVM" = function() refine_spatial_svm(
+    "marginSVM" = function() marginSVM:::.refine_spatial_svm_engine(
       sim$xy, sim$labels, sim$samples,
       control = list(workers = 1L, seed = 2200000L + index)),
-    "marginSVM trust field" = function() refine_spatial_svm(
-      sim$xy, sim$labels, sim$samples,
-      control = list(experimental_v2 = 1, workers = 1L, seed = 2200000L + index)),
-    "Graph refinement" = function() refine_spatial_clusters(sim$xy, sim$labels, sim$samples),
-    "SpaGCN refine" = function() SpatialGraphRefine:::.refine_published_labels(
+    "Graph refinement" = function() marginSVM:::refine_spatial_clusters(
+      sim$xy, sim$labels, sim$samples),
+    "SpaGCN refine" = function() marginSVM:::.refine_published_labels(
       sim$xy, sim$labels, sim$samples, "spagcn", 6L),
-    "GraphST refine" = function() SpatialGraphRefine:::.refine_published_labels(
+    "GraphST refine" = function() marginSVM:::.refine_published_labels(
       sim$xy, sim$labels, sim$samples, "graphst", 50L),
-    "C++ kNN vote" = function() refine_spatial_clusters(
+    "C++ kNN vote" = function() marginSVM:::refine_spatial_clusters(
       sim$xy, sim$labels, sim$samples,
       control = list(weighted = FALSE, iterations = 1L, consensus = 0.5,
                      preserve = 0, margin = 0, current_support = 1)),
-    "Potts-like ICM" = function() refine_spatial_clusters(
+    "Potts-like ICM" = function() marginSVM:::refine_spatial_clusters(
       sim$xy, sim$labels, sim$samples,
       control = list(weighted = FALSE, iterations = 8L, consensus = 0.5,
                      preserve = 0.35, margin = 0, current_support = 1))

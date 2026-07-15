@@ -19,7 +19,8 @@
 #' @return A factor with refined assignments. Attributes `support`, `changes`,
 #'   and `neighbors` contain refinement diagnostics. `support` is a local vote
 #'   fraction, not a calibrated probability.
-#' @export
+#' @keywords internal
+#' @noRd
 #' @examples
 #' sim <- simulate_spatial_domains(n = 2000, pattern = "jagged_stripes")
 #' refined <- refine_spatial_clusters(sim$xy, sim$labels)
@@ -174,7 +175,7 @@ refine_spatial_clusters <- function(xy, labels, samples = NULL, control = NULL, 
 
 .refine_spatial_graph_native <- function(xy, labels, samples, settings) {
   .Call(
-    "_SpatialGraphRefine_refine_spatial_graph_cpp",
+    "_marginSVM_refine_spatial_graph_cpp",
     xy,
     labels,
     samples,
@@ -185,7 +186,7 @@ refine_spatial_clusters <- function(xy, labels, samples = NULL, control = NULL, 
     as.double(settings$margin),
     isTRUE(settings$weighted),
     as.double(settings$current_support),
-    PACKAGE = "SpatialGraphRefine"
+    PACKAGE = "marginSVM"
   )
 }
 
@@ -193,10 +194,10 @@ refine_spatial_clusters <- function(xy, labels, samples = NULL, control = NULL, 
   method <- match.arg(method)
   if (is.null(neighbors)) neighbors <- if (method == "graphst") 50L else 6L
   native <- .Call(
-    "_SpatialGraphRefine_direct_refiner_cpp",
+    "_marginSVM_direct_refiner_cpp",
     as.matrix(xy), as.integer(labels), as.integer(samples),
     if (method == "graphst") 0L else 1L, as.integer(neighbors),
-    PACKAGE = "SpatialGraphRefine"
+    PACKAGE = "marginSVM"
   )
   output <- factor(levels(labels)[as.integer(native)], levels = levels(labels))
   names(output) <- rownames(xy)
@@ -333,8 +334,8 @@ refine_spatial_clusters <- function(xy, labels, samples = NULL, control = NULL, 
 #' @param backend Either `"cuda"` or `"metal"`.
 #' @param provider Backend function, or `NULL` to unregister it.
 #' @return Invisibly, the registered backend name.
+#' @keywords internal
 #' @noRd
-#' @export
 register_spatial_backend <- function(backend = c("cuda", "metal"), provider) {
   backend <- match.arg(backend)
   if (is.null(provider)) {
@@ -351,8 +352,8 @@ register_spatial_backend <- function(backend = c("cuda", "metal"), provider) {
 #' Report available spatial refinement backends
 #'
 #' @return A data frame reporting backend availability and implementation source.
+#' @keywords internal
 #' @noRd
-#' @export
 spatial_backend_capabilities <- function() {
   registered <- unname(vapply(c("cuda", "metal"), exists, logical(1L),
     envir = .spatial_backend_registry, inherits = FALSE))

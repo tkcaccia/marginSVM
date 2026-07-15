@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 
 suppressPackageStartupMessages({
-  library(SpatialGraphRefine)
+  library(marginSVM)
   library(dplyr)
   library(ggplot2)
 })
@@ -25,8 +25,9 @@ for (i in seq_along(patterns)) {
       seed = 1600000L + i
     )
   }
-  pred <- refine_spatial_svm(sim$xy, sim$labels, sim$samples,
-                             control = list(workers = 1L, seed = 1700000L + i))
+  pred <- marginSVM:::.refine_spatial_svm_engine(
+    sim$xy, sim$labels, sim$samples,
+    control = list(workers = 1L, seed = 1700000L + i))
   display <- sample.int(nrow(sim$xy), 5000L)
   states <- list(Reference = sim$truth, `Corrupted input` = sim$labels,
                  marginSVM = pred)

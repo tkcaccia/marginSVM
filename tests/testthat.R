@@ -1,4 +1,4 @@
 library(testthat)
-library(SpatialGraphRefine)
+library(marginSVM)
 
-test_check("SpatialGraphRefine")
+test_check("marginSVM")

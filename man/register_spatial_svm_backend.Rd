@@ -2,7 +2,7 @@
 % Please edit documentation in R/structured_spatial_svm.R
 \name{register_spatial_svm_backend}
 \alias{register_spatial_svm_backend}
-\title{Register a structured SVM accelerator backend}
+\title{Register a marginSVM accelerator backend}
 \usage{
 register_spatial_svm_backend(backend = c("cuda", "metal"), provider)
 }
@@ -15,7 +15,8 @@ register_spatial_svm_backend(backend = c("cuda", "metal"), provider)
 Invisibly, the backend name.
 }
 \description{
-A provider receives numeric `xy`, integer `labels`, integer `samples`, and the
-validated `control` list. It returns a list containing `labels`, `confidence`,
-`margin`, `local_support`, and `tiles`; `abstained_samples` is optional.
+This developer interface registers an optional CUDA or Metal provider. A
+provider receives numeric coordinates, integer labels, integer sample codes,
+and the frozen settings list, and returns the same diagnostics as the CPU
+engine.
 }

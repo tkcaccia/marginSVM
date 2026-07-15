@@ -2,7 +2,7 @@
 % Please edit documentation in R/structured_spatial_svm.R
 \name{spatial_svm_backend_capabilities}
 \alias{spatial_svm_backend_capabilities}
-\title{Report structured SVM backend availability}
+\title{Report marginSVM backend availability}
 \usage{
 spatial_svm_backend_capabilities()
 }
@@ -10,5 +10,5 @@ spatial_svm_backend_capabilities()
 A data frame reporting availability and implementation source.
 }
 \description{
-Report structured SVM backend availability
+Report marginSVM backend availability
 }

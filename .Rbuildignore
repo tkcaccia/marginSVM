@@ -3,7 +3,7 @@
 ^\\.Rhistory$
 ^\\.RData$
 ^\\.Rcheck$
-^SpatialGraphRefine\\.Rcheck$
+^marginSVM\\.Rcheck$
 ^\\.DS_Store$
 ^benchmarks$
 ^docs$
@@ -13,6 +13,6 @@
 ^manuscript$
 ^output$
 ^tmp$
-^SpatialGraphRefine_.*\.tar\.gz$
+^marginSVM_.*\.tar\.gz$
 ^.*\\.Rproj$
 ^src/.*\\.(o|so|dll|dylib)$

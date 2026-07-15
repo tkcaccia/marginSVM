@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 
 suppressPackageStartupMessages({
-  library(SpatialGraphRefine)
+  library(marginSVM)
   library(dplyr)
   library(tidyr)
   library(ggplot2)
@@ -50,7 +50,7 @@ run_one <- function(index) {
   result <- bind_rows(lapply(seq_along(settings), function(j) {
     control <- utils::modifyList(
       list(workers = 1L, seed = 4200000L + index), settings[[j]])
-    timing <- system.time(pred <- refine_spatial_svm(
+    timing <- system.time(pred <- marginSVM:::.refine_spatial_svm_engine(
       sim$xy, sim$labels, sim$samples, control = control))
     correct <- pred == sim$truth
     data.frame(

@@ -18,11 +18,11 @@ four error mechanisms, two- and three-dimensional coordinates, and single or
 multiple tissue sections. Direct competitors consume the same coordinates and
 initial labels; end-to-end spatial clustering methods are outside this comparison.
 
-The faster default was selected on 48 paired development scenarios and frozen
-before evaluation on 560 independent scenarios. Relative to the previous
-configuration, it was 1.68-fold faster overall with a mean accuracy difference of
--0.00022. In the 120 independent 19-class scenarios, it was 1.80-fold faster and
-the accuracy difference was +0.00014.
+The production computational profile was selected on 48 development scenarios
+and frozen before evaluation on 560 independent scenarios. The held-out speed
+validation included 440 five-class and 120 nineteen-class scenarios and confirmed
+that the selected tile, landmark, and decoder budget preserved accuracy within the
+predefined tolerance.
 
 ## CPU scaling
 

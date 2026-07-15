@@ -36,18 +36,12 @@ navbar:
       href: https://github.com/tkcaccia/marginSVM/blob/main/output/pdf/marginsvm-manuscript.pdf
 
 reference:
-  - title: SVM refinement
-    desc: Primary marginSVM interface and accelerator registration.
+  - title: Refinement
+    desc: The production marginSVM interface and backend information.
     contents:
       - refine_spatial_svm
       - spatial_svm_backend_capabilities
       - register_spatial_svm_backend
-  - title: Graph refinement
-    desc: Conservative graph-based refinement interface.
-    contents:
-      - refine_spatial_clusters
-      - spatial_backend_capabilities
-      - register_spatial_backend
   - title: Simulation
     desc: Reproducible spatial-domain and gradient-region generators.
     contents:

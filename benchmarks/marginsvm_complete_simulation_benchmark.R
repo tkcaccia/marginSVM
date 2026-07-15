@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 
 suppressPackageStartupMessages({
-  library(SpatialGraphRefine)
+  library(marginSVM)
   library(dplyr)
   library(tidyr)
   library(ggplot2)
@@ -19,7 +19,7 @@ patterns <- c("jagged_stripes", "wavy_layers", "rings", "spiral", "branching",
               "layers3d")
 density_profiles <- c("uniform", "moderate", "strong", "extreme", "hotspot")
 noise_types <- c("random", "boundary", "patch", "region")
-method_levels <- c("Initial", "marginSVM", "marginSVM trust field", "Graph refinement",
+method_levels <- c("Initial", "marginSVM", "Graph refinement",
                    "SpaGCN refine", "GraphST refine", "C++ kNN vote", "Potts-like ICM")
 
 theme_set(theme_bw(base_size = 10) + theme(panel.grid.minor = element_blank()))
@@ -62,27 +62,24 @@ score_prediction <- function(pred, sim, elapsed, method) {
 
 run_methods <- function(sim, seed) {
   methods <- list(
-    "marginSVM" = function() refine_spatial_svm(
+    "marginSVM" = function() marginSVM:::.refine_spatial_svm_engine(
       sim$xy, sim$labels, sim$samples,
       control = list(workers = 1L, seed = seed)
     ),
-    "marginSVM trust field" = function() refine_spatial_svm(
-      sim$xy, sim$labels, sim$samples,
-      control = list(experimental_v2 = 1, workers = 1L, seed = seed)
-    ),
-    "Graph refinement" = function() refine_spatial_clusters(sim$xy, sim$labels, sim$samples),
-    "SpaGCN refine" = function() SpatialGraphRefine:::.refine_published_labels(
+    "Graph refinement" = function() marginSVM:::refine_spatial_clusters(
+      sim$xy, sim$labels, sim$samples),
+    "SpaGCN refine" = function() marginSVM:::.refine_published_labels(
       sim$xy, sim$labels, sim$samples, method = "spagcn", neighbors = 6L
     ),
-    "GraphST refine" = function() SpatialGraphRefine:::.refine_published_labels(
+    "GraphST refine" = function() marginSVM:::.refine_published_labels(
       sim$xy, sim$labels, sim$samples, method = "graphst", neighbors = 50L
     ),
-    "C++ kNN vote" = function() refine_spatial_clusters(
+    "C++ kNN vote" = function() marginSVM:::refine_spatial_clusters(
       sim$xy, sim$labels, sim$samples,
       control = list(weighted = FALSE, iterations = 1L, consensus = 0.5,
                      preserve = 0, margin = 0, current_support = 1)
     ),
-    "Potts-like ICM" = function() refine_spatial_clusters(
+    "Potts-like ICM" = function() marginSVM:::refine_spatial_clusters(
       sim$xy, sim$labels, sim$samples,
       control = list(weighted = FALSE, iterations = 8L, consensus = 0.5,
                      preserve = 0.35, margin = 0, current_support = 1)
@@ -268,8 +265,9 @@ for (i in seq_along(atlas_patterns)) {
       seed = 1600000L + i
     )
   }
-  pred <- refine_spatial_svm(sim$xy, sim$labels, sim$samples,
-                             control = list(workers = 1L, seed = 1700000L + i))
+  pred <- marginSVM:::.refine_spatial_svm_engine(
+    sim$xy, sim$labels, sim$samples,
+    control = list(workers = 1L, seed = 1700000L + i))
   display <- if (nrow(sim$xy) > 5000L) sample.int(nrow(sim$xy), 5000L) else seq_len(nrow(sim$xy))
   states <- list(Reference = sim$truth, `Corrupted input` = sim$labels, marginSVM = pred)
   for (state in names(states)) {

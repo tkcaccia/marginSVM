@@ -1,0 +1,122 @@
+---
+title: "Getting started with marginSVM"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting started with marginSVM}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.width = 8, fig.height = 3)
+library(marginSVM)
+```
+
+## Refine spatial labels
+
+marginSVM needs spatial coordinates and an initial label for every location. A
+tissue or section identifier is optional. The example below contains four areas
+whose dominant classes are A, B, B, and C, with minority labels mixed into each
+area.
+
+```{r refine}
+sim <- simulate_gradient_regions(
+  n = 4000,
+  minority = 0.25,
+  samples = 2,
+  density_profile = "strong",
+  seed = 12
+)
+
+refined <- refine_spatial_svm(
+  xy = sim$xy,
+  labels = sim$labels,
+  samples = sim$samples
+)
+
+c(
+  input_accuracy = mean(sim$labels == sim$truth),
+  refined_accuracy = mean(refined == sim$truth)
+)
+```
+
+Tiles and model settings are automatic. Different tissues never share graph
+neighbors or local models.
+
+## Visualize the correction
+
+```{r spatial-plot, echo=FALSE, fig.cap="Reference regions, noisy input labels, and marginSVM output for the first tissue."}
+rows <- sim$samples == levels(sim$samples)[1]
+palette <- c(A = "#2A9D8F", B = "#E9C46A", C = "#E76F51")
+old_par <- par(mfrow = c(1, 3), mar = c(1.5, 1.5, 2, 0.5))
+plot(sim$xy[rows, ], col = palette[sim$truth[rows]], pch = 16, cex = 0.35,
+     axes = FALSE, asp = 1, main = "Reference")
+plot(sim$xy[rows, ], col = palette[sim$labels[rows]], pch = 16, cex = 0.35,
+     axes = FALSE, asp = 1, main = "Noisy labels")
+plot(sim$xy[rows, ], col = palette[refined[rows]], pch = 16, cex = 0.35,
+     axes = FALSE, asp = 1, main = "marginSVM")
+par(old_par)
+```
+
+## Inspect diagnostics
+
+The result is a factor with the same levels as the input. Per-location evidence
+and execution information are attached without changing the ordinary vector
+interface.
+
+```{r diagnostics}
+head(data.frame(
+  label = refined,
+  confidence = attr(refined, "confidence"),
+  margin = attr(refined, "margin"),
+  local_support = attr(refined, "local_support")
+))
+
+c(
+  tiles = attr(refined, "tiles"),
+  workers = attr(refined, "workers")
+)
+attr(refined, "abstained_samples")
+```
+
+Low margin indicates that the final decision lies near a competing class.
+`local_support` measures agreement of the input label with nearby labels. These
+scores are diagnostics rather than calibrated biological probabilities.
+
+## Use measured spatial data
+
+For a Seurat object, extract coordinates and pass the annotation vector directly.
+The following code is not evaluated because Seurat is not a package dependency.
+
+```{r seurat, eval=FALSE}
+library(Seurat)
+
+xy <- GetTissueCoordinates(object)[, c("x", "y")]
+labels <- object$wsi_annotation_name
+object$marginSVM <- refine_spatial_svm(xy, labels)
+```
+
+For multiple sections, concatenate coordinates and labels and pass a matching
+section identifier:
+
+```{r multiple-tissues, eval=FALSE}
+refined <- refine_spatial_svm(
+  xy = coordinates,
+  labels = initial_labels,
+  samples = section_id
+)
+```
+
+## CPU and optional accelerators
+
+The package always includes the multithreaded C++ CPU backend. Large datasets are
+automatically divided into overlapping 2D or 3D tiles. Use `workers` only when a
+specific CPU limit is needed.
+
+```{r backends}
+spatial_svm_backend_capabilities()
+```
+
+CUDA and Metal are provider interfaces. If no provider is registered, `"auto"`
+uses CPU and an explicitly requested unavailable accelerator warns before falling
+back to CPU.

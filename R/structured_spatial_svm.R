@@ -1,61 +1,37 @@
 #' Refine spatial cluster assignments with marginSVM
 #'
-#' Fits robust nonlinear SVM boundaries in overlapping adaptive tiles and
-#' reconciles their probabilities with an edge-aware spatial total-variation
-#' model. All neighborhoods, tiling, fitting, blending, and decoding execute in
-#' C++; this R function only validates inputs and selects automatic defaults.
+#' `refine_spatial_svm()` repairs noisy assignments using overlapping local
+#' Nystrom SVMs, graph evidence, and edge-aware total-variation decoding. Tiles
+#' and model settings are selected automatically. When `samples` is supplied,
+#' each tissue or section is processed independently.
 #'
 #' @param xy Numeric matrix with two or three spatial coordinates per row.
-#' @param labels Initial cluster assignments.
-#' @param samples Optional tissue or section identifier per row.
-#' @param control Optional named list of advanced controls. Most analyses should
-#'   use the automatic defaults.
-#' @param backend Computational backend. CPU is always available; registered
-#'   accelerator providers can be selected when installed.
-#' @param verbose Print native tile progress.
+#' @param labels Initial cluster assignments, one per row of `xy`.
+#' @param samples Optional tissue or section identifier, one per row of `xy`.
+#' @param backend Computational backend. `"auto"` uses a registered CUDA or
+#'   Metal provider when available and otherwise uses the built-in CPU engine.
+#' @param workers Number of CPU tile workers. `NULL` selects up to four physical
+#'   cores automatically. Accelerator providers use their own execution policy.
 #'
-#' @return A factor with confidence, margin, local-support, tile, backend, and
-#'   worker diagnostics stored as attributes. The experimental v2 path also
-#'   returns trust, tile disagreement, perturbation stability, selective risk,
-#'   pointwise decision, and protected-component attributes.
+#' @return A factor with the same levels and row names as `labels`. Attributes
+#'   `confidence`, `margin`, `local_support`, `tiles`, `backend`, `workers`, and
+#'   `abstained_samples` contain diagnostics.
 #' @export
-refine_spatial_svm <- function(xy, labels, samples = NULL, control = NULL,
+#' @examples
+#' sim <- simulate_gradient_regions(n = 2000, minority = 0.25, samples = 2)
+#' refined <- refine_spatial_svm(sim$xy, sim$labels, sim$samples)
+#' mean(refined == sim$truth)
+refine_spatial_svm <- function(xy, labels, samples = NULL,
                                backend = c("auto", "cpu", "cuda", "metal"),
-                               verbose = FALSE) {
-  backend <- match.arg(backend)
-  xy <- as.matrix(xy)
-  if (!is.numeric(xy) || !length(xy) || ncol(xy) < 2L || ncol(xy) > 3L ||
-      any(!is.finite(xy))) {
-    stop("`xy` must be a finite numeric matrix with two or three columns.", call. = FALSE)
-  }
-  storage.mode(xy) <- "double"
-  if (length(labels) != nrow(xy) || anyNA(labels)) {
-    stop("`labels` must contain one non-missing assignment per row of `xy`.", call. = FALSE)
-  }
-  labels <- as.factor(labels)
-  if (nlevels(labels) < 2L) {
-    out <- labels
-    names(out) <- rownames(xy)
-    attr(out, "confidence") <- rep.int(1, nrow(xy))
-    attr(out, "margin") <- rep.int(1, nrow(xy))
-    attr(out, "local_support") <- rep.int(1, nrow(xy))
-    attr(out, "trust") <- rep.int(1, nrow(xy))
-    attr(out, "decision") <- factor(rep.int("retain", nrow(xy)),
-      levels = c("retain", "change", "unresolved"))
-    attr(out, "tiles") <- 0L
-    attr(out, "backend") <- "cpu"
-    attr(out, "workers") <- 1L
-    return(out)
-  }
-  if (is.null(samples)) samples <- rep.int(1L, nrow(xy))
-  if (length(samples) != nrow(xy) || anyNA(samples)) {
-    stop("`samples` must contain one non-missing tissue identifier per row.", call. = FALSE)
-  }
-  samples <- as.integer(as.factor(samples))
+                               workers = NULL) {
+  .refine_spatial_svm_engine(
+    xy = xy, labels = labels, samples = samples, backend = backend,
+    workers = workers, control = NULL, seed = 1L, verbose = FALSE
+  )
+}
 
-  cores <- parallel::detectCores(logical = FALSE)
-  if (is.na(cores)) cores <- 1L
-  defaults <- list(
+.marginsvm_defaults <- function(labels, workers, seed) {
+  list(
     neighbors = 12L,
     target_tile_size = 5000L,
     overlap = 0.25,
@@ -73,108 +49,139 @@ refine_spatial_svm <- function(xy, labels, samples = NULL, control = NULL,
     topology_abstention = if (nlevels(labels) > 10L) 1 else 0,
     adaptive_tiles = 1,
     cross_fitting = 1,
-    experimental_v2 = 0,
-    trust_neighbors = 48L,
-    anisotropy = 0.25,
-    pairwise_specialists = 1,
-    pairwise_max = 8L,
-    change_threshold = 0.005,
-    unresolved_threshold = 0.001,
     tv_strength = 0.06,
     tv_iterations = 24L,
-    workers = max(1L, min(4L, as.integer(cores) - 1L)),
-    seed = 1L
+    workers = workers,
+    seed = seed
   )
+}
+
+.refine_spatial_svm_engine <- function(xy, labels, samples = NULL,
+                                       backend = c("auto", "cpu", "cuda", "metal"),
+                                       workers = NULL, control = NULL, seed = 1L,
+                                       verbose = FALSE) {
+  backend <- match.arg(backend)
+  xy <- as.matrix(xy)
+  if (!is.numeric(xy) || !length(xy) || ncol(xy) < 2L || ncol(xy) > 3L ||
+      any(!is.finite(xy))) {
+    stop("`xy` must be a finite numeric matrix with two or three columns.", call. = FALSE)
+  }
+  storage.mode(xy) <- "double"
+  if (length(labels) != nrow(xy) || anyNA(labels)) {
+    stop("`labels` must contain one non-missing assignment per row of `xy`.", call. = FALSE)
+  }
+  labels <- as.factor(labels)
+  if (is.null(samples)) samples <- rep.int(1L, nrow(xy))
+  if (length(samples) != nrow(xy) || anyNA(samples)) {
+    stop("`samples` must contain one non-missing tissue identifier per row.", call. = FALSE)
+  }
+  samples <- as.integer(as.factor(samples))
+
+  if (is.null(workers)) {
+    cores <- parallel::detectCores(logical = FALSE)
+    if (is.na(cores)) cores <- 1L
+    workers <- max(1L, min(4L, as.integer(cores) - 1L))
+  }
+  workers <- as.integer(workers)
+  seed <- as.integer(seed)
+  if (length(workers) != 1L || is.na(workers) || workers < 1L) {
+    stop("`workers` must be `NULL` or one positive integer.", call. = FALSE)
+  }
+  if (length(seed) != 1L || is.na(seed)) {
+    stop("Internal `seed` must be one finite integer.", call. = FALSE)
+  }
+
+  settings <- .marginsvm_defaults(labels, workers, seed)
   if (is.null(control)) control <- list()
   if (!is.list(control) || (length(control) && is.null(names(control)))) {
-    stop("`control` must be a named list.", call. = FALSE)
+    stop("Internal `control` must be a named list.", call. = FALSE)
   }
-  unknown <- setdiff(names(control), names(defaults))
+  unknown <- setdiff(names(control), names(settings))
   if (length(unknown)) {
-    stop("Unknown `control` setting: ", paste(unknown, collapse = ", "), call. = FALSE)
+    stop("Unknown internal setting: ", paste(unknown, collapse = ", "), call. = FALSE)
   }
-  control <- utils::modifyList(defaults, control)
+  settings <- utils::modifyList(settings, control)
   integer_fields <- c("neighbors", "target_tile_size", "landmarks", "epochs",
-                      "trust_neighbors", "pairwise_max", "tv_iterations", "workers", "seed")
-  control[integer_fields] <- lapply(control[integer_fields], as.integer)
-  numeric_fields <- setdiff(names(defaults), c(integer_fields))
-  control[numeric_fields] <- lapply(control[numeric_fields], as.double)
-  valid <- control$neighbors >= 2L && control$target_tile_size >= 250L &&
-    control$overlap >= 0 && control$overlap < 1 && control$gamma > 0 &&
-    control$landmarks >= 8L && control$epochs >= 1L &&
-    control$learning_rate > 0 && control$lambda >= 0 && control$ramp > 1 &&
-    control$retention >= 0 && control$graph_mix >= 0 && control$graph_mix <= 1 &&
-    control$probability_floor > 0 && control$probability_floor < 1 &&
-    control$coherence >= 0 &&
-    control$preserve_support >= 0 && control$preserve_support <= 2 &&
-    control$topology_abstention %in% c(0, 1) &&
-    control$adaptive_tiles %in% c(0, 1) && control$cross_fitting %in% c(0, 1) &&
-    control$experimental_v2 %in% c(0, 1) && control$trust_neighbors >= control$neighbors &&
-    control$anisotropy >= 0 && control$anisotropy <= 1 &&
-    control$pairwise_specialists %in% c(0, 1) && control$pairwise_max >= 0L &&
-    control$change_threshold >= 0 && control$change_threshold <= 1 &&
-    control$unresolved_threshold >= 0 &&
-    control$unresolved_threshold <= control$change_threshold &&
-    control$tv_strength >= 0 &&
-    control$tv_iterations >= 1L && control$workers >= 1L &&
-    all(vapply(control, function(value) all(is.finite(value)), logical(1L)))
-  if (!valid) stop("Invalid structured SVM control settings.", call. = FALSE)
+                      "tv_iterations", "workers", "seed")
+  settings[integer_fields] <- lapply(settings[integer_fields], as.integer)
+  numeric_fields <- setdiff(names(settings), integer_fields)
+  settings[numeric_fields] <- lapply(settings[numeric_fields], as.double)
+  valid <- settings$neighbors >= 2L && settings$target_tile_size >= 250L &&
+    settings$overlap >= 0 && settings$overlap < 1 && settings$gamma > 0 &&
+    settings$landmarks >= 8L && settings$epochs >= 1L &&
+    settings$learning_rate > 0 && settings$lambda >= 0 && settings$ramp > 1 &&
+    settings$retention >= 0 && settings$graph_mix >= 0 && settings$graph_mix <= 1 &&
+    settings$probability_floor > 0 && settings$probability_floor < 1 &&
+    settings$coherence >= 0 && settings$preserve_support >= 0 &&
+    settings$preserve_support <= 2 && settings$topology_abstention %in% c(0, 1) &&
+    settings$adaptive_tiles %in% c(0, 1) && settings$cross_fitting %in% c(0, 1) &&
+    settings$tv_strength >= 0 && settings$tv_iterations >= 1L &&
+    settings$workers >= 1L &&
+    all(vapply(settings, function(value) all(is.finite(value)), logical(1L)))
+  if (!valid) stop("Invalid internal marginSVM settings.", call. = FALSE)
+
+  if (nlevels(labels) < 2L) {
+    out <- labels
+    names(out) <- rownames(xy)
+    attr(out, "confidence") <- rep.int(1, nrow(xy))
+    attr(out, "margin") <- rep.int(1, nrow(xy))
+    attr(out, "local_support") <- rep.int(1, nrow(xy))
+    attr(out, "tiles") <- 0L
+    attr(out, "abstained_samples") <- integer()
+    attr(out, "backend") <- "cpu"
+    attr(out, "workers") <- workers
+    return(out)
+  }
 
   available <- vapply(c("cuda", "metal"), exists, logical(1L),
                       envir = .spatial_svm_backend_registry, inherits = FALSE)
   if (backend == "auto") {
     preference <- if (Sys.info()[["sysname"]] == "Darwin") {
       c("metal", "cuda", "cpu")
-    } else c("cuda", "metal", "cpu")
+    } else {
+      c("cuda", "metal", "cpu")
+    }
     backend_used <- preference[preference %in% c("cpu", names(available)[available])][1L]
   } else if (backend == "cpu" || isTRUE(available[[backend]])) {
     backend_used <- backend
   } else {
-    warning(backend, " structured SVM backend is unavailable; using CPU.", call. = FALSE)
+    warning(backend, " marginSVM backend is unavailable; using CPU.", call. = FALSE)
     backend_used <- "cpu"
   }
+
   if (backend_used == "cpu") {
     result <- .Call(
-      "_SpatialGraphRefine_structured_spatial_svm_cpp",
-      xy, as.integer(labels), samples, control, isTRUE(verbose),
-      PACKAGE = "SpatialGraphRefine"
+      "_marginSVM_structured_spatial_svm_cpp",
+      xy, as.integer(labels), samples, settings, isTRUE(verbose),
+      PACKAGE = "marginSVM"
     )
   } else {
     result <- .spatial_svm_backend_registry[[backend_used]](
-      xy = xy, labels = as.integer(labels), samples = samples, control = control
+      xy = xy, labels = as.integer(labels), samples = samples, control = settings
     )
     result <- .validate_spatial_svm_backend_result(result, nrow(xy), nlevels(labels))
   }
+
   refined <- factor(levels(labels)[result$labels], levels = levels(labels))
   names(refined) <- rownames(xy)
   attr(refined, "confidence") <- result$confidence
   attr(refined, "margin") <- result$margin
   attr(refined, "local_support") <- result$local_support
-  if (!is.null(result$trust)) attr(refined, "trust") <- result$trust
-  if (!is.null(result$tile_disagreement)) {
-    attr(refined, "tile_disagreement") <- result$tile_disagreement
-    attr(refined, "perturbation_stability") <- result$perturbation_stability
-    attr(refined, "selective_risk") <- result$selective_risk
-    attr(refined, "decision") <- factor(
-      c("retain", "change", "unresolved")[result$decision + 1L],
-      levels = c("retain", "change", "unresolved"))
-    attr(refined, "protected_component") <- result$protected_component
-  }
   attr(refined, "tiles") <- result$tiles
   attr(refined, "abstained_samples") <- result$abstained_samples
   attr(refined, "backend") <- backend_used
-  attr(refined, "workers") <- control$workers
-  attr(refined, "control") <- control
+  attr(refined, "workers") <- settings$workers
   refined
 }
 
 .spatial_svm_backend_registry <- new.env(parent = emptyenv())
 
-#' Register a structured SVM accelerator backend
+#' Register a marginSVM accelerator backend
 #'
-#' A provider receives numeric `xy`, integer `labels`, integer `samples`, and the
-#' validated `control` list. It returns a list containing `labels`, `confidence`,
-#' `margin`, `local_support`, and `tiles`; `abstained_samples` is optional.
+#' This developer interface registers an optional CUDA or Metal provider. A
+#' provider receives numeric coordinates, integer labels, integer sample codes,
+#' and the frozen settings list, and returns the same diagnostics as the CPU
+#' engine.
 #'
 #' @param backend Either `"cuda"` or `"metal"`.
 #' @param provider Backend function, or `NULL` to unregister it.
@@ -193,7 +200,7 @@ register_spatial_svm_backend <- function(backend = c("cuda", "metal"), provider)
   invisible(backend)
 }
 
-#' Report structured SVM backend availability
+#' Report marginSVM backend availability
 #'
 #' @return A data frame reporting availability and implementation source.
 #' @export
@@ -211,13 +218,13 @@ spatial_svm_backend_capabilities <- function() {
 .validate_spatial_svm_backend_result <- function(result, n, classes) {
   required <- c("labels", "confidence", "margin", "local_support", "tiles")
   if (!is.list(result) || !all(required %in% names(result))) {
-    stop("Structured SVM backend returned an incomplete result.", call. = FALSE)
+    stop("marginSVM backend returned an incomplete result.", call. = FALSE)
   }
   result$labels <- as.integer(result$labels)
   vectors <- c("labels", "confidence", "margin", "local_support")
   if (any(vapply(result[vectors], length, integer(1L)) != n) ||
       anyNA(result$labels) || any(result$labels < 1L | result$labels > classes)) {
-    stop("Structured SVM backend returned invalid per-observation values.", call. = FALSE)
+    stop("marginSVM backend returned invalid per-observation values.", call. = FALSE)
   }
   if (is.null(result$abstained_samples)) result$abstained_samples <- integer()
   result

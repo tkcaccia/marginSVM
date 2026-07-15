@@ -2,9 +2,8 @@
 
 ## Overall assessment
 
-**Recommendation: major revision.** This is a substantially stronger manuscript
-than the previous version. Presenting one frozen marginSVM algorithm removes an
-unhelpful model-selection narrative and makes the scientific claim auditable. The
+**Recommendation: major revision.** Presenting one frozen marginSVM algorithm
+makes the scientific claim auditable. The
 paper defines a useful problem that is distinct from end-to-end spatial clustering,
 provides a scalable C++17 implementation, evaluates diverse spatial structures and
 error mechanisms, and reports both aggregate gains and important failure modes.

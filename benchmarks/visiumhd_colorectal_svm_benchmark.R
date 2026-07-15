@@ -2,7 +2,7 @@
 
 suppressPackageStartupMessages({
   library(Seurat)
-  library(SpatialGraphRefine)
+  library(marginSVM)
   library(FNN)
   library(mclust)
   library(dplyr)
@@ -146,23 +146,25 @@ svm_settings <- list(
   target_tile_size = target_tile_size, workers = workers, seed = 230001L
 )
 svm_method <- function(initial) {
-  refine_spatial_svm(xy, initial, samples, control = svm_settings)
+  marginSVM:::.refine_spatial_svm_engine(
+    xy, initial, samples, control = svm_settings)
 }
 methods <- list(
   "SVM refinement" = svm_method,
-  "Graph refinement" = function(initial) refine_spatial_clusters(xy, initial, samples),
-  "SpaGCN refine" = function(initial) SpatialGraphRefine:::.refine_published_labels(
+  "Graph refinement" = function(initial) marginSVM:::refine_spatial_clusters(
+    xy, initial, samples),
+  "SpaGCN refine" = function(initial) marginSVM:::.refine_published_labels(
     xy, initial, samples, method = "spagcn", neighbors = 6L
   ),
-  "GraphST refine" = function(initial) SpatialGraphRefine:::.refine_published_labels(
+  "GraphST refine" = function(initial) marginSVM:::.refine_published_labels(
     xy, initial, samples, method = "graphst", neighbors = 50L
   ),
-  "C++ kNN vote" = function(initial) refine_spatial_clusters(
+  "C++ kNN vote" = function(initial) marginSVM:::refine_spatial_clusters(
     xy, initial, samples,
     control = list(weighted = FALSE, iterations = 1L, consensus = 0.5,
                    preserve = 0, margin = 0, current_support = 1)
   ),
-  "Potts-like ICM" = function(initial) refine_spatial_clusters(
+  "Potts-like ICM" = function(initial) marginSVM:::refine_spatial_clusters(
     xy, initial, samples,
     control = list(weighted = FALSE, iterations = 8L, consensus = 0.5,
                    preserve = 0.35, margin = 0, current_support = 1)
