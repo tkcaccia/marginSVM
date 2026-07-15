@@ -1,0 +1,61 @@
+url: https://tkcaccia.github.io/marginSVM/
+destination: site
+title: marginSVM
+
+template:
+  bootstrap: 5
+  bootswatch: flatly
+  bslib:
+    primary: "#24756f"
+    base_font:
+      google: Source Sans 3
+    heading_font:
+      google: Source Sans 3
+    code_font:
+      google: Source Code Pro
+
+home:
+  title: "marginSVM: fast spatial cluster-label refinement"
+  description: >
+    Multiscale adaptive refinement with graph-integrated Nystrom support
+    vector machines for large 2D and 3D spatial transcriptomics datasets.
+
+navbar:
+  structure:
+    left: [intro, reference, benchmarks, manuscript]
+    right: [search, github]
+  components:
+    intro:
+      text: Get started
+      href: index.html
+    benchmarks:
+      text: Benchmarks
+      href: articles/benchmarks.html
+    manuscript:
+      text: Manuscript
+      href: https://github.com/tkcaccia/marginSVM/blob/main/output/pdf/marginsvm-manuscript.pdf
+
+reference:
+  - title: SVM refinement
+    desc: Primary marginSVM interface and accelerator registration.
+    contents:
+      - refine_spatial_svm
+      - spatial_svm_backend_capabilities
+      - register_spatial_svm_backend
+  - title: Graph refinement
+    desc: Conservative graph-based refinement interface.
+    contents:
+      - refine_spatial_clusters
+      - spatial_backend_capabilities
+      - register_spatial_backend
+  - title: Simulation
+    desc: Reproducible spatial-domain and gradient-region generators.
+    contents:
+      - simulate_spatial_clusters
+      - simulate_spatial_domains
+      - simulate_gradient_regions
+
+footer:
+  structure:
+    left: developed_by
+    right: built_with

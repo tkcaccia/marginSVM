@@ -1,0 +1,39 @@
+Package: SpatialGraphRefine
+Type: Package
+Title: Fast Spatial Refinement of Cluster Labels
+Version: 0.2.0
+Authors@R: person(given = "Stefano", family = "Cacciatore",
+    email = "tkcaccia@gmail.com", role = c("aut", "cre"))
+Description: Refines noisy spatial cluster labels with a fast, boundary-aware nearest-
+    neighbor graph or local support-vector-machine style decision boundaries. The C++
+    implementation supports large two- and three-dimensional spatial transcriptomics
+    datasets, multiple tissue sections, simulation, diagnostics, and high-resolution
+    projection. Large datasets can be processed as overlapping two- or three-
+    dimensional tiles on multiple CPU workers. Optional CUDA and Metal providers can
+    register through a stable backend interface. A legacy SVM interface is retained.
+License: MIT + file LICENSE
+URL: https://tkcaccia.github.io/marginSVM/,
+    https://github.com/tkcaccia/marginSVM
+BugReports: https://github.com/tkcaccia/marginSVM/issues
+Encoding: UTF-8
+Depends:
+    R (>= 4.1.0)
+Imports:
+    Rcpp,
+    parallel
+LinkingTo:
+    Rcpp
+Suggests:
+    testthat (>= 3.0.0),
+    ggplot2,
+    dplyr,
+    tidyr,
+    patchwork,
+    e1071,
+    FNN,
+    mclust,
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+Config/testthat/edition: 3
+Config/roxygen2/version: 8.0.0

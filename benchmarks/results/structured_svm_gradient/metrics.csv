@@ -1,0 +1,4 @@
+"method","accuracy","seconds"
+"Initial",0.95008,0
+"Structured SVM",0.99818,0.433
+"Graph refinement",0.99868,NA

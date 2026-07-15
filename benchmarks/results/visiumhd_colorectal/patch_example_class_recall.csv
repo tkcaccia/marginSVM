@@ -1,0 +1,58 @@
+"method","annotation","recall"
+"Initial","blood vessel",0.856079404466501
+"Initial","desmoplastic submucosa",0.809763022824069
+"Initial","dysplasia",0.728876967600762
+"Initial","dystrophic calcification",0.89065606361829
+"Initial","exocrine duct",1
+"Initial","external glands",1
+"Initial","immune cells",0.60056657223796
+"Initial","intramucosal carcinoma",0.687768445818401
+"Initial","intratumoral stroma",0.620800395256917
+"Initial","invasive carcinoma",0.758303595937414
+"Initial","lamina propria dysplasia",0.6866068156834
+"Initial","lymphovascular channels",0.785564853556485
+"Initial","muscularis mucosa",0.805022831050228
+"Initial","muscularis propria",0.733263268523384
+"Initial","nerve fibers",0.711229946524064
+"Initial","normal gland",0.925035236081748
+"Initial","normal lamina propria",0.935474494986194
+"Initial","oedematous submucosa",0.632593670425609
+"Initial","roi_379",0
+"Current default","blood vessel",0.820099255583127
+"Current default","desmoplastic submucosa",0.803975101015616
+"Current default","dysplasia",0.726382908637444
+"Current default","dystrophic calcification",0.862823061630219
+"Current default","exocrine duct",0.756410256410256
+"Current default","external glands",0.981522542498152
+"Current default","immune cells",0.588668555240793
+"Current default","intramucosal carcinoma",0.680327196126173
+"Current default","intratumoral stroma",0.565958498023715
+"Current default","invasive carcinoma",0.76608106871626
+"Current default","lamina propria dysplasia",0.669613411506046
+"Current default","lymphovascular channels",0.72907949790795
+"Current default","muscularis mucosa",0.772602739726027
+"Current default","muscularis propria",0.735680504466632
+"Current default","nerve fibers",0.700534759358289
+"Current default","normal gland",0.890591966173362
+"Current default","normal lamina propria",0.91382066560093
+"Current default","oedematous submucosa",0.632957439068752
+"Current default","roi_379",0
+"Tissue-adaptive","blood vessel",0.838709677419355
+"Tissue-adaptive","desmoplastic submucosa",0.808124931746205
+"Tissue-adaptive","dysplasia",0.728547563586739
+"Tissue-adaptive","dystrophic calcification",0.894632206759443
+"Tissue-adaptive","exocrine duct",0.987179487179487
+"Tissue-adaptive","external glands",1
+"Tissue-adaptive","immune cells",0.589801699716714
+"Tissue-adaptive","intramucosal carcinoma",0.684923262112549
+"Tissue-adaptive","intratumoral stroma",0.606101778656126
+"Tissue-adaptive","invasive carcinoma",0.762787080245219
+"Tissue-adaptive","lamina propria dysplasia",0.678865884939538
+"Tissue-adaptive","lymphovascular channels",0.74581589958159
+"Tissue-adaptive","muscularis mucosa",0.793607305936073
+"Tissue-adaptive","muscularis propria",0.730635838150289
+"Tissue-adaptive","nerve fibers",0.695187165775401
+"Tissue-adaptive","normal gland",0.914904862579281
+"Tissue-adaptive","normal lamina propria",0.923048975439616
+"Tissue-adaptive","oedematous submucosa",0.632229901782466
+"Tissue-adaptive","roi_379",0
