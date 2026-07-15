@@ -78,12 +78,17 @@ performance claim remains.
 
 ### 9. Independent biological validation
 
-**Outstanding by design.** The colorectal experiment recovers a reference
-annotation after synthetic corruption; it does not establish biological truth. We
-have narrowed the paper to algorithm and software validation and state that DLPFC,
-additional tumors, platforms, marker separation, histological concordance, and
-expert review remain necessary before a biological methods claim. This limitation
-cannot be removed without the independent datasets.
+**Clarified and partly addressed.** The 194,541-location, 19-class colorectal
+experiment is a real biological VisiumHD case study: its coordinates, tissue
+architecture, class frequencies, and WSI-derived annotations come directly from the
+measured specimen. The evaluation is semi-synthetic only in the controlled errors
+introduced into those annotations. It therefore tests recovery of a biological
+reference annotation under known perturbations, not whether that annotation is an
+independent molecular or pathological gold standard. We revised the Abstract,
+Methods, Results, and Discussion to make this distinction explicit. Cross-cohort
+validation on independently annotated DLPFC sections, additional tumors, platforms,
+marker separation, histological concordance, and expert review remains outstanding
+until those additional datasets are available.
 
 ## Minor comments
 

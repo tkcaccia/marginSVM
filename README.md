@@ -130,8 +130,9 @@ These scripts write raw CSV metrics and publication PNG figures to
   geometric families, including visual border comparisons.
 
 The manuscript includes disjoint synthetic seeds and a third untouched
-60-scenario seed block for the 19-class colorectal VisiumHD stress test.
-Independent biological datasets remain reserved for external validation.
+60-scenario seed block using a real 19-class colorectal VisiumHD tissue with
+controlled semi-synthetic label corruption. Independent tissues remain reserved
+for cross-cohort external validation.
 
 See `docs/literature_benchmark_notes.md` for related tools and benchmark papers.
 

@@ -37,12 +37,13 @@ accuracy, versus 0.8120 for graph refinement. Its paired accuracy advantage over
 each direct comparator was 0.0254-0.0401, with all stratified bootstrap 95%
 intervals above zero. SpaGCN better preserved the sparsest regions (0.7409 versus
 0.6644), and conservative methods were stronger at 5% corruption; marginSVM ranked
-first from 15% to 40%. On 60 untouched corruptions of 194,541 VisiumHD colorectal
-locations and 19 classes, marginSVM achieved 0.8664 accuracy. An opt-in trust-field
+first from 15% to 40%. On 60 untouched controlled corruptions of 194,541 locations
+from a real VisiumHD colorectal tissue with 19 biological annotation classes,
+marginSVM achieved 0.8664 accuracy. An opt-in trust-field
 extension improved a frozen colorectal confirmation but underperformed the default
 in general simulations. The CPU implementation processed 500,000 points in 6.19
-seconds in 2D and 10.14 seconds in 3D. Independent biological validation remains
-necessary.
+seconds in 2D and 10.14 seconds in 3D. Independent multi-tissue and cross-cohort
+biological validation remains necessary.
 
 # Introduction
 
@@ -320,13 +321,23 @@ TV decoding, or the robust ramp. Scaling used separate processes at 5,000 to
 500,000 observations in 2D and 3D; elapsed time and peak resident memory were
 measured outside the R process.
 
-We also evaluated 60 untouched corruptions of a VisiumHD colorectal tissue. After
-excluding missing annotations, 194,541 locations and 19 WSI annotation classes
-remained. Reference labels were corrupted at 5%, 10%, 15%, 25%, or 40% by dispersed
+We also evaluated a real biological VisiumHD colorectal tissue using a controlled
+semi-synthetic corruption design. After excluding missing annotations, 194,541
+measured tissue locations and 19 WSI-derived biological annotation classes remained.
+The biological coordinates, tissue architecture, region shapes, class frequencies,
+and reference annotations were all retained from the specimen; only the specified
+label errors were introduced computationally. Reference labels were corrupted at
+5%, 10%, 15%, 25%, or 40% by dispersed
 random replacement, adjacent-label boundary replacement, multiple spatial patches,
 or one coherent region. Three replicates produced 60 matched scenarios. Development,
 method-revision, and final confirmatory runs used disjoint seed blocks; only the
 third block supports confirmatory colorectal claims.
+
+This design is a real-data validation with semi-synthetic errors: it measures how
+well a refiner restores the tissue annotation after known perturbations. It does not
+test whether the reference annotation itself is a complete molecular or pathological
+gold standard. Those are distinct questions, and the latter requires external marker,
+histology, or expert evidence.
 
 Comparators were source-faithful SpaGCN strict-majority refinement, GraphST
 50-neighbor modal refinement, matched C++ kNN voting, Potts-like ICM, and conservative
@@ -457,7 +468,7 @@ backend only.
 
 ![marginSVM peak process memory through 500,000 observations.](../benchmarks/results/marginsvm_scaling/marginsvm_scaling_memory.png){ width=80% }
 
-## Final 19-class colorectal experiment
+## Real 19-class colorectal tissue: semi-synthetic corruption experiment
 
 On the untouched 60-scenario final block, marginSVM achieved the
 highest accuracy (0.8664), ARI (0.7866), macro recall (0.8269), boundary accuracy
@@ -516,7 +527,8 @@ opt-in high-complexity mode, not replacement of the validated general default.
 # Discussion
 
 The results support marginSVM as the strongest overall direct refiner in the
-complete simulation matrix and the 19-class colorectal stress test, but not as a
+complete simulation matrix and the real 19-class colorectal semi-synthetic
+corruption experiment, but not as a
 universal replacement. The ablation attributes the clearest measurable gains to TV
 decoding and graph fusion; adaptive tiles add a smaller mean gain, while the present
 experiments do not isolate an accuracy benefit from cross-fitting, the robust ramp,
@@ -541,13 +553,17 @@ generalize to the mixed-geometry simulation suite. Its confirmatory colorectal
 result should therefore be treated as evidence for a high-class operating mode,
 not as proof that additional selectivity always helps.
 
-The colorectal annotations are a stress-test reference, not independent ground
-truth. Injected errors may not represent natural clustering failures, and one tissue
-cannot establish cross-cohort generalization. Before submission as a biological
-methods paper, the frozen implementation should be evaluated on independently
-annotated DLPFC sections, additional tumors, high-resolution platforms, and
-multi-section or 3D data. Outcomes should include pathologist agreement, marker
-separation, rare-domain recall, histological border concordance, and stability.
+The colorectal analysis is a real biological case study: all spatial locations,
+tissue architecture, region prevalence, and 19 WSI-derived annotations come from
+the measured VisiumHD specimen. Its accuracy benchmark is semi-synthetic because
+the evaluation introduces known label errors and asks whether the original
+annotation can be recovered. This provides controlled real-tissue evidence, while
+not establishing that the reference annotation is itself a molecular gold standard.
+Injected errors may also differ from natural clustering failures, and one specimen
+cannot establish cross-cohort generalization. Independently annotated DLPFC sections,
+additional tumors, high-resolution platforms, and multi-section or 3D data would
+extend the evidence. Useful external endpoints include pathologist agreement,
+marker separation, rare-domain recall, histological border concordance, and stability.
 
 CUDA and Metal remain interface commitments rather than implemented accelerators.
 The CPU implementation processed 500,000 points in 6.19 seconds in 2D and 10.14
