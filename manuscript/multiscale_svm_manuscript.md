@@ -32,16 +32,14 @@ coherent changes that coordinates and labels alone cannot identify as errors. Th
 algorithm is implemented in C++17 with a thin R interface. We evaluated 708
 simulations spanning 11 geometries, 2D/3D layered gradients, five region-density
 profiles, four error mechanisms, and one or three tissues. Across 236
-replicate-averaged conditions, marginSVM achieved mean rank 1.88 and 0.8421
+replicate-averaged conditions, marginSVM achieved mean rank 1.71 and 0.8421
 accuracy, versus 0.8120 for graph refinement. Its paired accuracy advantage over
-each direct comparator was 0.0254-0.0401, with all stratified bootstrap 95%
+each direct comparator was 0.0300-0.0401, with all stratified bootstrap 95%
 intervals above zero. SpaGCN better preserved the sparsest regions (0.7409 versus
 0.6644), and conservative methods were stronger at 5% corruption; marginSVM ranked
 first from 15% to 40%. On 60 untouched controlled corruptions of 194,541 locations
 from a real VisiumHD colorectal tissue with 19 biological annotation classes,
-marginSVM achieved 0.8664 accuracy. An opt-in trust-field
-extension improved a frozen colorectal confirmation but underperformed the default
-in general simulations. The CPU implementation processed 500,000 points in 6.19
+marginSVM achieved 0.8664 accuracy. The CPU implementation processed 500,000 points in 6.19
 seconds in 2D and 10.14 seconds in 3D. Independent multi-tissue and cross-cohort
 biological validation remains necessary.
 
@@ -202,29 +200,6 @@ corruptions. Abstention restores the input labels for that tissue and is returne
 a diagnostic attribute. The rule is disabled by default for smaller label sets,
 where simulations favored unrestricted marginSVM.
 
-## Experimental continuous-trust extension
-
-An opt-in extension replaces the hard tissue decision with a continuous local
-trust field and pointwise selective prediction. For each observation, trust
-combines its cross-fitted input-label probability, same-label support at 6, 12,
-24, and 48 neighbors, variance across overlapping tile probabilities, and local
-probability-field stability. A two-component Gaussian mixture is anchored by an
-absolute evidence score so a mostly clean tissue cannot label its lower relative
-mode as unreliable wholesale. Sample-wide spatial coherence modifies trust
-continuously rather than forcing all points to abstain.
-
-Local covariance estimated from Euclidean kd-tree candidates defines a regularized
-Mahalanobis distance, mixed with Euclidean distance to follow elongated tissue
-structure. Near low-margin borders, at most eight one-vs-one Nyström SVM
-specialists adjust only the probability mass of locally plausible class pairs.
-After TV decoding, a correction score combines low trust, decoded margin,
-cross-fitted SVM advantage, perturbation stability, and squared input-label
-discordance. Each point is returned as retain, change, or unresolved. Connected
-change components become unresolved when their size, tile stability, sample trust,
-and label coherence indicate a non-identifiable coherent alteration. Rare input
-components are protected only when they contain at least four connected points and
-have high trust, stability, and tile agreement; size alone never protects them.
-
 ## Implementation and backend contract
 
 All algorithmic work is C++17. Tile models run through a native thread pool, while
@@ -353,15 +328,15 @@ families.
 ## Complete simulation matrix
 
 marginSVM ranked first overall with 0.8421 accuracy, 0.6542 ARI, and mean rank
-1.88 across 236 replicate-averaged conditions. Graph refinement was the closest
+1.71 across 236
+replicate-averaged conditions. Graph refinement was the closest
 accuracy comparator at 0.8120, while SpaGCN had the highest worst-class recall.
-The default marginSVM also outperformed the trust-field extension by 0.0254, so
-the extension remains opt-in rather than replacing the general method.
+The comparison contains one frozen marginSVM configuration and direct label-refinement
+competitors with equivalent inputs.
 
 | Method | Accuracy | ARI | Worst recall | Sparse-region accuracy | Boundary accuracy | Seconds |
 |:--|--:|--:|--:|--:|--:|--:|
 | marginSVM | **0.8421** | **0.6542** | 0.5934 | 0.6644 | **0.7076** | 0.098 |
-| marginSVM trust field | 0.8166 | 0.5941 | 0.5537 | 0.6350 | 0.6759 | 0.210 |
 | Graph refinement | 0.8120 | 0.5974 | 0.6026 | 0.6829 | 0.6426 | 0.021 |
 | C++ kNN vote | 0.8107 | 0.5968 | 0.5637 | 0.6276 | 0.6316 | 0.020 |
 | SpaGCN refine | 0.8060 | 0.5808 | **0.6555** | **0.7409** | 0.6328 | **0.009** |
@@ -369,11 +344,11 @@ the extension remains opt-in rather than replacing the general method.
 | Potts-like ICM | 0.8019 | 0.5787 | 0.5620 | 0.6342 | 0.6223 | 0.021 |
 
 The paired condition-level accuracy advantage was 0.0300 over graph refinement
-(95% interval 0.0253-0.0349), 0.0361 over SpaGCN (0.0308-0.0412), 0.0396 over
-GraphST (0.0313-0.0480), 0.0314 over kNN voting (0.0289-0.0339), and 0.0401 over
-Potts-like ICM (0.0354-0.0451). marginSVM beat these methods in 82.6%, 80.1%,
+(95% interval 0.0252-0.0349), 0.0361 over SpaGCN (0.0311-0.0413), 0.0396 over
+GraphST (0.0312-0.0482), 0.0314 over kNN voting (0.0289-0.0339), and 0.0401 over
+Potts-like ICM (0.0352-0.0450). marginSVM beat these methods in 82.6%, 80.1%,
 78.0%, 97.9%, and 89.8% of conditions, respectively. The Friedman test rejected
-equal method ranks ($\chi^2_6=387.9$, $p<2.2\times10^{-16}$); every Holm-adjusted
+equal method ranks ($\chi^2_5=336.57$, $p<2.2\times10^{-16}$); every Holm-adjusted
 paired marginSVM comparison had $p<2\times10^{-16}$.
 
 ![Mean method rank across the complete simulation matrix.](../benchmarks/results/marginsvm_complete_simulation/condition_level_mean_rank.png){ width=84% }
@@ -411,8 +386,8 @@ dominate the observation count.
 Across 48 gradient simulations, marginSVM achieved 0.9821 accuracy. Performance
 remained high in both 2D and 3D and under all four area-concentration profiles. At
 5% minority mixture, several conservative methods approached ceiling performance;
-at 25%, marginSVM was consistently strongest or near strongest, while the trust-field
-extension became too conservative. In a separate 50,000-observation A-B-B-C
+at 25%, marginSVM was consistently strongest or near strongest. In a separate
+50,000-observation A-B-B-C
 simulation with 5% minority labels and two tissues, marginSVM achieved 0.9982
 accuracy in 0.43 seconds, with area accuracies from 0.9980 to 0.9982.
 
@@ -499,31 +474,6 @@ accuracy 0.8022, close to the 0.8100 corrupted-input baseline.
 
 ![Final 25% random-mislabelling colorectal example with quantitatively selected zoom regions: maximum SVM advantage (A), correction-rich tissue (B), and a multiclass border (C).](../benchmarks/results/visiumhd_colorectal_structured_svm_final/random_25pct_spatial_zoomed.png){ width=98% }
 
-## Frozen trust-field extension
-
-The trust-field extension was tuned only on eight colorectal development
-corruptions (10% and 25%; random, boundary, patch, and region mechanisms). It
-improved mean development accuracy from 0.8696 to 0.8714 and reduced damage from
-0.0231 to 0.0137. All extension settings were then frozen before opening a new
-seed block beginning at 1,040,000.
-
-On the eight confirmatory corruptions, v2 improved accuracy by 0.0040, ARI by
-0.0074, macro recall by 0.0009, and worst-class recall by 0.0287. Damage was nearly
-halved. Boundary accuracy decreased by 0.0022, correction recall decreased because
-5.59% of points were marked unresolved, and runtime increased by 58%.
-
-| Method | Accuracy | ARI | Macro recall | Worst recall | Boundary | Damage | Seconds |
-|:--|--:|--:|--:|--:|--:|--:|--:|
-| marginSVM v1 | 0.8677 | 0.7923 | 0.8298 | 0.5874 | **0.7383** | 0.0232 | **4.61** |
-| marginSVM v2 | **0.8717** | **0.7997** | **0.8307** | **0.6162** | 0.7361 | **0.0128** | 7.26 |
-
-![Confirmatory colorectal zoom comparing v1 and the frozen trust-field extension.](../benchmarks/results/marginsvm_v2_crc_confirmatory_t0p005/crc_best_zoom.png){ width=98% }
-
-This advantage was domain-specific. On 16 mixed 2D/3D simulations with random or
-boundary errors, v2 achieved 0.9005 accuracy versus 0.9224 for v1. The extension
-reduced damage but left more injected errors unresolved. These results justify an
-opt-in high-complexity mode, not replacement of the validated general default.
-
 # Discussion
 
 The results support marginSVM as the strongest overall direct refiner in the
@@ -546,12 +496,6 @@ swaps. Topology abstention avoids some harmful changes but cannot recover missin
 biological information. Applications prioritizing very rare compartments should
 therefore inspect sparse-class recall and compare the conservative mode rather than
 selecting a refiner from aggregate accuracy alone.
-
-The trust-field extension sharpens this limitation. It improved the frozen
-19-class colorectal primary outcome and worst-class protection, but failed to
-generalize to the mixed-geometry simulation suite. Its confirmatory colorectal
-result should therefore be treated as evidence for a high-class operating mode,
-not as proof that additional selectivity always helps.
 
 The colorectal analysis is a real biological case study: all spatial locations,
 tissue architecture, region prevalence, and 19 WSI-derived annotations come from
@@ -581,9 +525,7 @@ refined <- refine_spatial_svm(xy, labels, samples = tissue_id)
 ```
 
 Confidence, margin, local support, tile count, backend, worker count, and abstained
-tissue IDs are returned as attributes. The opt-in v2 path additionally returns
-trust, tile disagreement, perturbation stability, selective risk, pointwise
-decision state, and rare-component protection. All quantitative claims are generated
+tissue IDs are returned as attributes. All quantitative claims are generated
 by scripts under `benchmarks/`. The principal synthetic analyses are regenerated by:
 
 ```sh

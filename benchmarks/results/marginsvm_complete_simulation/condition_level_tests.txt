@@ -3,7 +3,7 @@ $friedman
 	Friedman rank sum test
 
 data:  as.matrix(accuracy_matrix)
-Friedman chi-squared = 387.9, df = 6, p-value < 2.2e-16
+Friedman chi-squared = 336.57, df = 5, p-value < 2.2e-16
 
 
 $pairwise_holm
@@ -12,19 +12,17 @@ $pairwise_holm
 
 data:  conditions$accuracy and conditions$method
 
-                      C++ kNN vote Graph refinement GraphST refine marginSVM
-Graph refinement      0.6754       -                -              -
-GraphST refine        0.9155       0.8492           -              -
-marginSVM             < 2e-16      < 2e-16          < 2e-16        -
-marginSVM trust field 4.6e-07      0.0260           0.0026         < 2e-16
-Potts-like ICM        2.7e-06      < 2e-16          1.0000         < 2e-16
-SpaGCN refine         0.7425       0.0975           1.0000         < 2e-16
-                      marginSVM trust field Potts-like ICM
-Graph refinement      -                     -
-GraphST refine        -                     -
-marginSVM             -                     -
-marginSVM trust field -                     -
-Potts-like ICM        2.1e-14               -
-SpaGCN refine         4.6e-07               3.9e-07
+                 C++ kNN vote Graph refinement GraphST refine Potts-like ICM
+Graph refinement 0.675        -                -              -
+GraphST refine   0.915        0.849            -              -
+Potts-like ICM   2.2e-06      < 2e-16          1.000          -
+SpaGCN refine    0.742        0.097            1.000          2.7e-07
+marginSVM        < 2e-16      < 2e-16          < 2e-16        < 2e-16
+                 SpaGCN refine
+Graph refinement -
+GraphST refine   -
+Potts-like ICM   -
+SpaGCN refine    -
+marginSVM        < 2e-16
 
 P value adjustment method: holm

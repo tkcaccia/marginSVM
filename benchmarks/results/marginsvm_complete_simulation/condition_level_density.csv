@@ -1,36 +1,31 @@
 "density_profile","method","accuracy","rank"
-"extreme","C++ kNN vote",0.820539351851852,4
-"extreme","Graph refinement",0.817974537037037,5
+"extreme","C++ kNN vote",0.820539351851852,3
+"extreme","Graph refinement",0.817974537037037,4
 "extreme","GraphST refine",0.824880787037037,2
-"extreme","Potts-like ICM",0.807780092592593,7
-"extreme","SpaGCN refine",0.810576388888889,6
+"extreme","Potts-like ICM",0.807780092592593,6
+"extreme","SpaGCN refine",0.810576388888889,5
 "extreme","marginSVM",0.848788194444445,1
-"extreme","marginSVM trust field",0.824105324074074,3
-"hotspot","C++ kNN vote",0.798301767676768,4
-"hotspot","Graph refinement",0.800919191919192,3
-"hotspot","GraphST refine",0.792335858585859,6
-"hotspot","Potts-like ICM",0.788885101010101,7
-"hotspot","SpaGCN refine",0.796152777777778,5
+"hotspot","C++ kNN vote",0.798301767676768,3
+"hotspot","Graph refinement",0.800919191919192,2
+"hotspot","GraphST refine",0.792335858585859,5
+"hotspot","Potts-like ICM",0.788885101010101,6
+"hotspot","SpaGCN refine",0.796152777777778,4
 "hotspot","marginSVM",0.831958333333333,1
-"hotspot","marginSVM trust field",0.810296717171717,2
-"moderate","C++ kNN vote",0.809799768518519,4
-"moderate","Graph refinement",0.813518518518519,3
-"moderate","GraphST refine",0.793107638888889,7
-"moderate","Potts-like ICM",0.804289351851852,6
-"moderate","SpaGCN refine",0.807315972222222,5
+"moderate","C++ kNN vote",0.809799768518519,3
+"moderate","Graph refinement",0.813518518518519,2
+"moderate","GraphST refine",0.793107638888889,6
+"moderate","Potts-like ICM",0.804289351851852,5
+"moderate","SpaGCN refine",0.807315972222222,4
 "moderate","marginSVM",0.842707175925926,1
-"moderate","marginSVM trust field",0.814947916666667,2
-"strong","C++ kNN vote",0.811377314814815,4
-"strong","Graph refinement",0.812884259259259,3
-"strong","GraphST refine",0.801869212962963,6
-"strong","Potts-like ICM",0.800711805555556,7
-"strong","SpaGCN refine",0.807278935185185,5
+"strong","C++ kNN vote",0.811377314814815,3
+"strong","Graph refinement",0.812884259259259,2
+"strong","GraphST refine",0.801869212962963,5
+"strong","Potts-like ICM",0.800711805555556,6
+"strong","SpaGCN refine",0.807278935185185,4
 "strong","marginSVM",0.842045138888889,1
-"strong","marginSVM trust field",0.818202546296296,2
-"uniform","C++ kNN vote",0.812350694444445,4
-"uniform","Graph refinement",0.813915509259259,3
-"uniform","GraphST refine",0.799453703703704,7
-"uniform","Potts-like ICM",0.806771990740741,6
-"uniform","SpaGCN refine",0.807782407407407,5
+"uniform","C++ kNN vote",0.812350694444445,3
+"uniform","Graph refinement",0.813915509259259,2
+"uniform","GraphST refine",0.799453703703704,6
+"uniform","Potts-like ICM",0.806771990740741,5
+"uniform","SpaGCN refine",0.807782407407407,4
 "uniform","marginSVM",0.843931712962963,1
-"uniform","marginSVM trust field",0.815113425925926,2

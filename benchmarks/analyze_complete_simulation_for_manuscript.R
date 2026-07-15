@@ -9,7 +9,7 @@ suppressPackageStartupMessages({
 out_dir <- file.path("benchmarks", "results", "marginsvm_complete_simulation")
 metrics <- read.csv(file.path(out_dir, "complete_simulation_metrics.csv"),
                     check.names = FALSE)
-methods <- c("marginSVM", "marginSVM trust field", "Graph refinement",
+methods <- c("marginSVM", "Graph refinement",
              "SpaGCN refine", "GraphST refine", "C++ kNN vote",
              "Potts-like ICM")
 
@@ -69,7 +69,7 @@ rank_plot <- ggplot(ranked, aes(mean_rank, method)) +
                color = "grey75", linewidth = 0.6) +
   geom_point(size = 2.5, color = "#C44E52") +
   geom_text(aes(label = sprintf("%.2f", mean_rank)), hjust = -0.45, size = 3.2) +
-  scale_x_continuous(limits = c(1, 7), breaks = 1:7) +
+  scale_x_continuous(limits = c(1, 6), breaks = 1:6) +
   labs(x = "Mean rank across 236 replicate-averaged conditions", y = NULL) +
   theme_bw(base_size = 10) +
   theme(panel.grid.minor = element_blank(), panel.grid.major.y = element_blank())
@@ -82,10 +82,14 @@ pairwise <- stats::pairwise.wilcox.test(
   conditions$accuracy, conditions$method, paired = TRUE,
   p.adjust.method = "holm", exact = FALSE
 )
-capture.output(
-  list(friedman = friedman, pairwise_holm = pairwise),
-  file = file.path(out_dir, "condition_level_tests.txt")
+test_output <- capture.output(
+  list(friedman = friedman, pairwise_holm = pairwise)
 )
+while (length(test_output) > 0L && !nzchar(trimws(tail(test_output, 1L)))) {
+  test_output <- head(test_output, -1L)
+}
+writeLines(sub("[[:space:]]+$", "", test_output),
+           file.path(out_dir, "condition_level_tests.txt"))
 
 by_density <- conditions |>
   group_by(density_profile, method) |>

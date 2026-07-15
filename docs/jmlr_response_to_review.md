@@ -51,13 +51,14 @@ achieved 0.7409 sparse-region accuracy versus 0.6644 for marginSVM. The Discussi
 now recommends conservative refinement when very rare compartments dominate the
 scientific objective.
 
-### 6. Hyperparameters and trust-field mode
+### 6. Hyperparameters and method scope
 
-**Addressed in part.** The default and experimental modes are separated throughout.
-The trust-field extension remains opt-in because it improved the frozen 19-class
-colorectal block but lost to the default in the 708-scenario matrix. Component
-ablation and the existing disjoint development/confirmation split are reported.
-A full high-dimensional sensitivity surface would be expensive and is not claimed.
+**Addressed by scope reduction.** The manuscript now presents one frozen method:
+the production marginSVM configuration that performed best across the complete
+708-dataset matrix and was used for the primary 19-class colorectal experiment.
+The experimental trust-field branch, its separate tuning path, and its confirmatory
+substudy were removed from the paper. Component ablation, disjoint speed tuning,
+and independent validation of the final computational budget are reported.
 
 ### 7. Comparator validity
 
