@@ -1,50 +1,113 @@
 ---
-title: "Benchmarks and scaling"
+title: "FiberMargin benchmarks"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Benchmarks and scaling}
+  %\VignetteIndexEntry{FiberMargin benchmarks}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+library(fibermargin)
 ```
 
-## Validation design
+## Evaluation contract
 
-The simulation benchmark covers eleven geometries, five region-density profiles,
-four error mechanisms, two- and three-dimensional coordinates, and single or
-multiple tissue sections. Direct competitors consume the same coordinates and
-initial labels; end-to-end spatial clustering methods are outside this comparison.
+FiberMargin is evaluated as a coordinate-and-label repair operator. Each method
+receives a coordinate matrix, one observed categorical field, and optional
+specimen identifiers. Reference annotations are used only after repair to score
+controlled corruptions. Accuracy and adjusted Rand index (ARI) are primary;
+correction recall and damage describe how aggressively a method edits the input.
 
-The production computational profile was selected on 48 development scenarios
-and frozen before evaluation on 560 independent scenarios. The held-out speed
-validation included 440 five-class and 120 nineteen-class scenarios and confirmed
-that the selected tile, landmark, and decoder budget preserved accuracy within the
-predefined tolerance.
+The predefined real-coordinate protocols contain 60 corruptions of a 19-class CRC
+Visium HD annotation and 45 corruptions over five consecutive MERFISH planes.
+Each protocol preserves at least one observed exemplar of every reference class.
+The direct fixed controls are alpha-expansion Potts, a coordinate CRF, harmonic
+propagation, multiscale mode filtering, Potts-like ICM, fixed SpaGCN and GraphST
+correction rules, and an 8-nearest-neighbour modal filter.
 
-## CPU scaling
+| Dataset | Units | FiberMargin accuracy | FiberMargin ARI | Best accuracy | Best ARI |
+|:--|--:|--:|--:|:--|:--|
+| CRC | 60 | 0.8600 | 0.7812 | 0.8604 (Multiscale) | 0.7827 (Multiscale) |
+| MERFISH | 45 | 0.8886 | 0.7951 | 0.8843 (Alpha-expansion Potts) | 0.7888 (Alpha-expansion Potts) |
 
-With four CPU tile workers, marginSVM processed 500,000 observations in 6.19
-seconds in 2D and 10.14 seconds in 3D on the benchmark machine. Peak process
-memory was 636 MB and 708 MB, respectively.
+The complete per-case ledgers, control configuration, stored-input identities,
+and run manifests are in
+`benchmarks/results/fibermargin_final_enclosure_real_matrix_v2/`. These are
+controlled label-recovery results; repeated corruptions of one annotation are
+not independent biological specimens.
 
-```{r runtime-figure, echo=FALSE, out.width="100%", fig.cap="CPU runtime through 500,000 observations."}
-knitr::include_graphics("figures/marginsvm_scaling_runtime.png")
+## Report all outcomes
+
+The exported evaluator reports primary accuracy and ARI together with boundary,
+sparse-region, and worst-class performance, correction recall, and damage.
+
+```{r evaluation, eval=FALSE}
+sim <- simulate_spatial_domains(
+  n = 50000,
+  pattern = "jagged_stripes",
+  noise_type = "boundary",
+  density_profile = "extreme",
+  seed = 7
+)
+
+refined <- refine_spatial_labels(sim$xy, sim$labels, sim$samples, workers = 4)
+evaluate_spatial_refinement(
+  truth = sim$truth,
+  initial = sim$labels,
+  refined = refined,
+  boundary = sim$boundary,
+  sparse = sim$sparse,
+  method = "FiberMargin"
+)
 ```
 
-```{r memory-figure, echo=FALSE, out.width="100%", fig.cap="Peak process memory through 500,000 observations."}
-knitr::include_graphics("figures/marginsvm_scaling_memory.png")
+`damage_rate` is the fraction of initially correct labels made incorrect by
+repair. It complements `correction_recall`, the fraction of initially incorrect
+labels recovered. A method with a high correction recall can still reduce
+accuracy if it damages too many correct labels.
+
+## Stress-test geometries
+
+The package exposes planar, gradient, complex-shape, and volumetric simulators.
+They return coordinates, the observed labels, evaluation-only truth, specimen
+membership, and boundary/sparse masks, so every method can be scored under the
+same conditions.
+
+```{r simulation-catalogue, eval=FALSE}
+jagged <- simulate_spatial_domains(
+  n = 50000, pattern = "jagged_stripes", noise_type = "boundary",
+  density_profile = "extreme", seed = 1
+)
+gradient <- simulate_gradient_regions(
+  n = 50000, minority = 0.05, dimensions = 3, samples = 3, seed = 2
+)
+tubes <- simulate_complex_spatial_domains(
+  n = 50000, shape = "tubular_network", density_profile = "extreme", seed = 3
+)
+volume <- simulate_volumetric_domains(
+  n = 50000, shape = "helical_channels", acquisition = "irregular_z", seed = 4
+)
 ```
 
-## Reproduction
+`benchmark_spatial_refiners()` applies named repair functions to one simulated
+object with the same evaluation masks. Its default is FiberMargin.
 
-The repository retains raw per-scenario metrics and scripts under `benchmarks/`.
-The main speed analyses are reproduced with:
+```{r benchmark-api, eval=FALSE}
+benchmark_spatial_refiners(jagged)
+```
+
+## Reproduce the fixed analyses
+
+The scripts below reproduce the direct matrix and the focused mechanism and
+component audits on the stored input fields.
 
 ```sh
-Rscript benchmarks/marginsvm_speed_tuning.R
-Rscript benchmarks/marginsvm_speed_validation.R
-Rscript benchmarks/run_marginsvm_scaling.R
+Rscript benchmarks/reconcile_isolation_guard_real_matrix.R
+Rscript benchmarks/audit_two_sided_enclosure_real.R
+Rscript benchmarks/audit_fibermargin_component_reduction_real.R
 ```
+
+Use `R_LIBS_USER` to point these commands to the tested local package library
+when working from a source checkout.

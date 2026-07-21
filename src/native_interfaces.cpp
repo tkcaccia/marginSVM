@@ -4,10 +4,8 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
-#include <numeric>
 #include <queue>
-#include <random>
-#include <unordered_map>
+#include <utility>
 #include <vector>
 
 using namespace Rcpp;
@@ -106,219 +104,208 @@ class KdTree {
   }
 };
 
-struct RffModel {
-  int dims;
-  int features;
-  int classes;
-  std::vector<int> class_codes;
-  std::vector<double> center;
-  std::vector<double> scale;
-  std::vector<double> omega;
-  std::vector<double> phase;
-  std::vector<double> weights;
+struct FlowEdge {
+  int to;
+  int reverse;
+  double capacity;
 };
 
-double dot_score(const RffModel& model, int cls, const double* phi) {
-  const int stride = model.features + 1;
-  const double* w = &model.weights[cls * stride];
-  double score = w[model.features];
-  for (int f = 0; f < model.features; ++f) {
-    score += w[f] * phi[f];
-  }
-  return score;
-}
+class Dinic {
+ public:
+  explicit Dinic(int vertices)
+      : graph_(vertices), level_(vertices), next_(vertices) {}
 
-void compute_phi(const RffModel& model,
-                 const NumericMatrix& x,
-                 int row,
-                 std::vector<double>& phi) {
-  const double scale = std::sqrt(2.0 / static_cast<double>(model.features));
-  for (int f = 0; f < model.features; ++f) {
-    double projection = model.phase[f];
-    const int offset = f * model.dims;
-    for (int d = 0; d < model.dims; ++d) {
-      const double normalized = (x(row, d) - model.center[d]) / model.scale[d];
-      projection += model.omega[offset + d] * normalized;
+  void add_edge(int from, int to, double capacity) {
+    FlowEdge forward = {to, static_cast<int>(graph_[to].size()), capacity};
+    FlowEdge backward = {from, static_cast<int>(graph_[from].size()), 0.0};
+    graph_[from].push_back(forward);
+    graph_[to].push_back(backward);
+  }
+
+  double max_flow(int source, int sink) {
+    double total = 0.0;
+    while (build_levels(source, sink)) {
+      std::fill(next_.begin(), next_.end(), 0);
+      while (true) {
+        const double pushed = send_flow(source, sink,
+                                        std::numeric_limits<double>::infinity());
+        if (pushed <= kEpsilon) break;
+        total += pushed;
+      }
     }
-    phi[f] = scale * std::cos(projection);
+    return total;
   }
-}
 
-std::vector<int> unique_sorted_codes(const std::vector<int>& labels,
-                                     const std::vector<int>& rows) {
-  std::vector<int> out;
-  out.reserve(rows.size());
-  for (int row : rows) {
-    out.push_back(labels[row]);
-  }
-  std::sort(out.begin(), out.end());
-  out.erase(std::unique(out.begin(), out.end()), out.end());
-  return out;
-}
-
-RffModel train_model(const NumericMatrix& xy,
-                     const std::vector<int>& y,
-                     const std::vector<int>& rows,
-                     const std::vector<int>& class_codes,
-                     double gamma,
-                     int n_features,
-                     int epochs,
-                     double lambda,
-                     double learning_rate,
-                     std::uint32_t seed) {
-  RffModel model;
-  model.dims = xy.ncol();
-  model.features = std::max(4, n_features);
-  model.classes = class_codes.size();
-  model.class_codes = class_codes;
-  model.center.assign(model.dims, 0.0);
-  model.scale.assign(model.dims, 1.0);
-  for (int d = 0; d < model.dims; ++d) {
-    double low = std::numeric_limits<double>::infinity();
-    double high = -std::numeric_limits<double>::infinity();
-    for (int row : rows) {
-      low = std::min(low, xy(row, d));
-      high = std::max(high, xy(row, d));
-    }
-    model.center[d] = low;
-    model.scale[d] = std::max(high - low, 1e-12);
-  }
-  model.omega.resize(static_cast<std::size_t>(model.features) * model.dims);
-  model.phase.resize(model.features);
-  model.weights.assign(static_cast<std::size_t>(model.classes) * (model.features + 1), 0.0);
-
-  std::mt19937 rng(seed);
-  std::normal_distribution<double> normal(0.0, std::sqrt(2.0 * gamma));
-  std::uniform_real_distribution<double> uniform_phase(0.0, 2.0 * M_PI);
-
-  for (double& value : model.omega) value = normal(rng);
-  for (double& value : model.phase) value = uniform_phase(rng);
-
-  std::unordered_map<int, int> class_index;
-  for (int i = 0; i < model.classes; ++i) class_index[class_codes[i]] = i;
-
-  std::vector<double> phi(model.features);
-  std::vector<int> order(rows.begin(), rows.end());
-  const int stride = model.features + 1;
-  std::uint64_t iter = 0;
-
-  for (int epoch = 0; epoch < epochs; ++epoch) {
-    std::shuffle(order.begin(), order.end(), rng);
-    for (int row : order) {
-      compute_phi(model, xy, row, phi);
-      const int positive = class_index[y[row]];
-      const double epoch_progress = static_cast<double>(iter++) /
-        std::max<std::size_t>(1, rows.size());
-      const double eta = learning_rate / std::sqrt(1.0 + epoch_progress);
-
-      double positive_score = dot_score(model, positive, phi.data());
-      double negative_score = -std::numeric_limits<double>::infinity();
-      int negative = -1;
-      for (int cls = 0; cls < model.classes; ++cls) {
-        if (cls == positive) continue;
-        const double score = dot_score(model, cls, phi.data());
-        if (score > negative_score) {
-          negative_score = score;
-          negative = cls;
+  std::vector<bool> source_reachable(int source) const {
+    std::vector<bool> reachable(graph_.size(), false);
+    std::queue<int> pending;
+    pending.push(source);
+    reachable[source] = true;
+    while (!pending.empty()) {
+      const int vertex = pending.front();
+      pending.pop();
+      for (const FlowEdge& edge : graph_[vertex]) {
+        if (edge.capacity > kEpsilon && !reachable[edge.to]) {
+          reachable[edge.to] = true;
+          pending.push(edge.to);
         }
       }
-      if (negative >= 0 && positive_score - negative_score < 1.0) {
-        double* positive_weights = &model.weights[positive * stride];
-        double* negative_weights = &model.weights[negative * stride];
-        const double shrink = std::max(0.0, 1.0 - eta * lambda);
-        for (int f = 0; f < model.features; ++f) {
-          positive_weights[f] = shrink * positive_weights[f] + eta * phi[f];
-          negative_weights[f] = shrink * negative_weights[f] - eta * phi[f];
+    }
+    return reachable;
+  }
+
+ private:
+  static constexpr double kEpsilon = 1e-10;
+  std::vector<std::vector<FlowEdge> > graph_;
+  std::vector<int> level_;
+  std::vector<int> next_;
+
+  bool build_levels(int source, int sink) {
+    std::fill(level_.begin(), level_.end(), -1);
+    std::queue<int> pending;
+    pending.push(source);
+    level_[source] = 0;
+    while (!pending.empty()) {
+      const int vertex = pending.front();
+      pending.pop();
+      for (const FlowEdge& edge : graph_[vertex]) {
+        if (edge.capacity > kEpsilon && level_[edge.to] < 0) {
+          level_[edge.to] = level_[vertex] + 1;
+          pending.push(edge.to);
         }
-        positive_weights[model.features] += eta;
-        negative_weights[model.features] -= eta;
+      }
+    }
+    return level_[sink] >= 0;
+  }
+
+  double send_flow(int vertex, int sink, double available) {
+    if (vertex == sink) return available;
+    for (int& edge_index = next_[vertex];
+         edge_index < static_cast<int>(graph_[vertex].size()); ++edge_index) {
+      FlowEdge& edge = graph_[vertex][edge_index];
+      if (edge.capacity <= kEpsilon || level_[edge.to] != level_[vertex] + 1) {
+        continue;
+      }
+      const double pushed = send_flow(
+        edge.to, sink, std::min(available, edge.capacity)
+      );
+      if (pushed > kEpsilon) {
+        edge.capacity -= pushed;
+        graph_[edge.to][edge.reverse].capacity += pushed;
+        return pushed;
+      }
+    }
+    return 0.0;
+  }
+};
+
+struct PottsComponent {
+  std::vector<int> rows;
+  std::vector<std::pair<int, int> > edges;
+  std::vector<int> classes;
+  int neighbors;
+};
+
+double component_potts_energy(const std::vector<int>& current,
+                              const std::vector<int>& observed,
+                              const PottsComponent& component,
+                              double unary) {
+  double energy = 0.0;
+  for (int local = 0; local < static_cast<int>(component.rows.size()); ++local) {
+    const int row = component.rows[local];
+    if (current[row] != observed[row]) energy += unary;
+  }
+  for (const std::pair<int, int>& edge : component.edges) {
+    const int left = component.rows[edge.first];
+    const int right = component.rows[edge.second];
+    if (current[left] != current[right]) energy += 1.0;
+  }
+  return energy;
+}
+
+bool alpha_expand_component(std::vector<int>& current,
+                            const std::vector<int>& observed,
+                            const PottsComponent& component,
+                            int alpha,
+                            double unary) {
+  const int count = static_cast<int>(component.rows.size());
+  if (count < 2) return false;
+  const int source = count;
+  const int sink = count + 1;
+  const double infinity = 1e12;
+  std::vector<double> retain_cost(count, 0.0);
+  std::vector<double> switch_cost(count, 0.0);
+
+  for (int local = 0; local < count; ++local) {
+    const int row = component.rows[local];
+    const int label = current[row];
+    retain_cost[local] = label == observed[row] ? 0.0 : unary;
+    switch_cost[local] = alpha == observed[row] ? 0.0 : unary;
+    if (label == alpha) {
+      retain_cost[local] = infinity;
+      switch_cost[local] = 0.0;
+    }
+  }
+
+  Dinic graph(count + 2);
+  for (const std::pair<int, int>& edge : component.edges) {
+    const int left = edge.first;
+    const int right = edge.second;
+    const int left_label = current[component.rows[left]];
+    const int right_label = current[component.rows[right]];
+    const double e00 = left_label == right_label ? 0.0 : 1.0;
+    const double e01 = left_label == alpha ? 0.0 : 1.0;
+    const double e10 = alpha == right_label ? 0.0 : 1.0;
+    const double pairwise = std::max(0.0, 0.5 * (e01 + e10 - e00));
+    switch_cost[left] += e10 - e00 - pairwise;
+    switch_cost[right] += e01 - e00 - pairwise;
+    if (pairwise > 1e-12) {
+      graph.add_edge(left, right, pairwise);
+      graph.add_edge(right, left, pairwise);
+    }
+  }
+
+  for (int local = 0; local < count; ++local) {
+    const double shift = std::min(retain_cost[local], switch_cost[local]);
+    retain_cost[local] -= shift;
+    switch_cost[local] -= shift;
+    graph.add_edge(source, local, std::max(0.0, switch_cost[local]));
+    graph.add_edge(local, sink, std::max(0.0, retain_cost[local]));
+  }
+
+  graph.max_flow(source, sink);
+  const std::vector<bool> source_side = graph.source_reachable(source);
+  std::vector<int> changed_rows;
+  std::vector<int> previous_labels;
+  changed_rows.reserve(count);
+  previous_labels.reserve(count);
+  for (int local = 0; local < count; ++local) {
+    if (!source_side[local]) {
+      const int row = component.rows[local];
+      if (current[row] != alpha) {
+        previous_labels.push_back(current[row]);
+        current[row] = alpha;
+        changed_rows.push_back(row);
       }
     }
   }
+  if (changed_rows.empty()) return false;
 
-  return model;
-}
-
-int tile_id(const NumericMatrix& x,
-            int row,
-            const std::vector<int>& tiles,
-            const std::vector<double>& mins,
-            const std::vector<double>& maxs) {
-  int id = 0;
-  int multiplier = 1;
-  const int dims = x.ncol();
-  for (int d = 0; d < dims; ++d) {
-    if (x(row, d) < mins[d] || x(row, d) > maxs[d]) return -1;
-    const double span = maxs[d] - mins[d];
-    int pos = 0;
-    if (span > 0) {
-      pos = static_cast<int>(std::floor((x(row, d) - mins[d]) / span * tiles[d]));
-      if (pos < 0) pos = 0;
-      if (pos >= tiles[d]) pos = tiles[d] - 1;
-    }
-    id += pos * multiplier;
-    multiplier *= tiles[d];
+  const double after = component_potts_energy(current, observed, component, unary);
+  for (std::size_t index = 0; index < changed_rows.size(); ++index) {
+    current[changed_rows[index]] = previous_labels[index];
   }
-  return id;
-}
-
-void train_predict_block(const NumericMatrix& train_x,
-                         const NumericMatrix& pred_x,
-                         const std::vector<int>& y,
-                         const std::vector<int>& train_rows,
-                         const std::vector<int>& pred_rows,
-                         IntegerVector& output,
-                         NumericMatrix& scores,
-                         double gamma,
-                         int n_features,
-                         int epochs,
-                         double lambda,
-                         double learning_rate,
-                         std::uint32_t seed) {
-  if (train_rows.empty() || pred_rows.empty()) return;
-  std::vector<int> class_codes = unique_sorted_codes(y, train_rows);
-  if (class_codes.empty()) return;
-  if (class_codes.size() == 1) {
-    for (int row : pred_rows) {
-      output[row] = class_codes[0];
-      scores(row, class_codes[0] - 1) = 1.0;
-    }
-    return;
+  const double before = component_potts_energy(current, observed, component, unary);
+  if (after > before + 1e-8) {
+    return false;
   }
-
-  RffModel model = train_model(
-    train_x,
-    y,
-    train_rows,
-    class_codes,
-    gamma,
-    n_features,
-    epochs,
-    lambda,
-    learning_rate,
-    seed
-  );
-
-  std::vector<double> phi(model.features);
-  for (int row : pred_rows) {
-    compute_phi(model, pred_x, row, phi);
-    double best_score = -std::numeric_limits<double>::infinity();
-    int best_class = model.class_codes[0];
-    for (int cls = 0; cls < model.classes; ++cls) {
-      const double score = dot_score(model, cls, phi.data());
-      scores(row, model.class_codes[cls] - 1) = score;
-      if (score > best_score) {
-        best_score = score;
-        best_class = model.class_codes[cls];
-      }
-    }
-    output[row] = best_class;
-  }
+  for (const int row : changed_rows) current[row] = alpha;
+  return true;
 }
 
 } // namespace
 
-extern "C" SEXP _marginSVM_refine_spatial_graph_cpp(SEXP xy_s,
+extern "C" SEXP _fibermargin_refine_spatial_graph_cpp(SEXP xy_s,
                                                            SEXP labels_s,
                                                            SEXP samples_s,
                                                            SEXP neighbors_s,
@@ -450,7 +437,7 @@ extern "C" SEXP _marginSVM_refine_spatial_graph_cpp(SEXP xy_s,
   END_RCPP
 }
 
-extern "C" SEXP _marginSVM_direct_refiner_cpp(SEXP xy_s,
+extern "C" SEXP _fibermargin_direct_refiner_cpp(SEXP xy_s,
                                                         SEXP labels_s,
                                                         SEXP samples_s,
                                                         SEXP method_s,
@@ -459,7 +446,10 @@ extern "C" SEXP _marginSVM_direct_refiner_cpp(SEXP xy_s,
   NumericMatrix xy(xy_s);
   IntegerVector labels(labels_s);
   IntegerVector samples(samples_s);
-  const int method = as<int>(method_s);  // 0: GraphST, 1: SpaGCN
+  // 0 is the fixed-k unweighted neighbour-mode kernel. It is used both by the
+  // GraphST correction protocol and by the explicitly labelled modal control.
+  // 1 is the SpaGCN correction protocol.
+  const int method = as<int>(method_s);
   const int requested_k = as<int>(neighbors_s);
   const int n = xy.nrow();
   int n_classes = 0;
@@ -526,17 +516,144 @@ extern "C" SEXP _marginSVM_direct_refiner_cpp(SEXP xy_s,
   END_RCPP
 }
 
-extern "C" SEXP _marginSVM_structured_spatial_svm_cpp(
-  SEXP xy_s, SEXP labels_s, SEXP samples_s, SEXP control_s, SEXP verbose_s);
+extern "C" SEXP _fibermargin_alpha_expansion_potts_cpp(SEXP xy_s,
+                                                        SEXP labels_s,
+                                                        SEXP samples_s,
+                                                        SEXP neighbors_s,
+                                                        SEXP unary_s,
+                                                        SEXP cycles_s) {
+  BEGIN_RCPP
+  NumericMatrix xy(xy_s);
+  IntegerVector labels(labels_s);
+  IntegerVector samples(samples_s);
+  const int n = xy.nrow();
+  const int requested_k = std::max(1, as<int>(neighbors_s));
+  const double unary = std::max(1e-8, as<double>(unary_s));
+  const int maximum_cycles = std::max(1, as<int>(cycles_s));
+  if (labels.size() != n || samples.size() != n || xy.ncol() < 1) {
+    stop("Incompatible coordinate, label, or specimen inputs.");
+  }
+
+  std::vector<int> observed(n);
+  std::vector<int> current(n);
+  std::vector<int> sample_codes(n);
+  std::vector<int> sample_levels;
+  sample_levels.reserve(n);
+  for (int row = 0; row < n; ++row) {
+    if (labels[row] == NA_INTEGER || labels[row] < 1 ||
+        samples[row] == NA_INTEGER) {
+      stop("Labels and specimen identifiers must be non-missing.");
+    }
+    observed[row] = labels[row];
+    current[row] = labels[row];
+    sample_codes[row] = samples[row];
+    sample_levels.push_back(samples[row]);
+  }
+  std::sort(sample_levels.begin(), sample_levels.end());
+  sample_levels.erase(
+    std::unique(sample_levels.begin(), sample_levels.end()), sample_levels.end()
+  );
+
+  std::vector<PottsComponent> components;
+  components.reserve(sample_levels.size());
+  IntegerVector sample_neighbors(sample_levels.size());
+  std::vector<int> local_index(n, -1);
+  for (std::size_t sample_index = 0; sample_index < sample_levels.size(); ++sample_index) {
+    Rcpp::checkUserInterrupt();
+    PottsComponent component;
+    const int sample = sample_levels[sample_index];
+    for (int row = 0; row < n; ++row) {
+      if (sample_codes[row] == sample) component.rows.push_back(row);
+    }
+    const int count = static_cast<int>(component.rows.size());
+    if (count < 2) {
+      sample_neighbors[sample_index] = 0;
+      components.push_back(component);
+      continue;
+    }
+    const int k = std::min(requested_k, count - 1);
+    component.neighbors = k;
+    sample_neighbors[sample_index] = k;
+    for (int local = 0; local < count; ++local) {
+      local_index[component.rows[local]] = local;
+    }
+    KdTree tree(xy, component.rows);
+    std::vector<int> nearest;
+    std::vector<double> distances;
+    component.edges.reserve(static_cast<std::size_t>(count) * k);
+    for (int local = 0; local < count; ++local) {
+      const int row = component.rows[local];
+      tree.query(row, k, nearest, distances);
+      for (const int neighbor : nearest) {
+        const int other = local_index[neighbor];
+        if (other < 0) continue;
+        component.edges.push_back(std::make_pair(
+          std::min(local, other), std::max(local, other)
+        ));
+      }
+    }
+    std::sort(component.edges.begin(), component.edges.end());
+    component.edges.erase(
+      std::unique(component.edges.begin(), component.edges.end()), component.edges.end()
+    );
+    for (const int row : component.rows) component.classes.push_back(observed[row]);
+    std::sort(component.classes.begin(), component.classes.end());
+    component.classes.erase(
+      std::unique(component.classes.begin(), component.classes.end()), component.classes.end()
+    );
+    for (const int row : component.rows) local_index[row] = -1;
+    components.push_back(component);
+  }
+
+  IntegerVector changes_per_cycle(maximum_cycles);
+  int completed_cycles = 0;
+  for (int cycle = 0; cycle < maximum_cycles; ++cycle) {
+    int changed = 0;
+    for (const PottsComponent& component : components) {
+      if (component.classes.size() < 2 || component.edges.empty()) continue;
+      for (const int alpha : component.classes) {
+        Rcpp::checkUserInterrupt();
+        std::vector<int> before;
+        before.reserve(component.rows.size());
+        for (const int row : component.rows) before.push_back(current[row]);
+        if (alpha_expand_component(current, observed, component, alpha, unary)) {
+          for (std::size_t local = 0; local < component.rows.size(); ++local) {
+            if (current[component.rows[local]] != before[local]) ++changed;
+          }
+        }
+      }
+    }
+    changes_per_cycle[cycle] = changed;
+    completed_cycles = cycle + 1;
+    if (changed == 0) break;
+  }
+
+  double final_energy = 0.0;
+  for (const PottsComponent& component : components) {
+    final_energy += component_potts_energy(current, observed, component, unary);
+  }
+  IntegerVector output(n);
+  for (int row = 0; row < n; ++row) output[row] = current[row];
+  output.attr("neighbors") = sample_neighbors;
+  output.attr("changes") = changes_per_cycle[Range(0, completed_cycles - 1)];
+  output.attr("energy") = final_energy;
+  output.attr("unary") = unary;
+  return output;
+  END_RCPP
+}
+
+extern "C" SEXP _fibermargin_fiber_margin_cpp(
+  SEXP xy_s, SEXP labels_s, SEXP samples_s, SEXP control_s);
 
 static const R_CallMethodDef CallEntries[] = {
-  {"_marginSVM_refine_spatial_graph_cpp", (DL_FUNC) &_marginSVM_refine_spatial_graph_cpp, 10},
-  {"_marginSVM_direct_refiner_cpp", (DL_FUNC) &_marginSVM_direct_refiner_cpp, 5},
-  {"_marginSVM_structured_spatial_svm_cpp", (DL_FUNC) &_marginSVM_structured_spatial_svm_cpp, 5},
+  {"_fibermargin_refine_spatial_graph_cpp", (DL_FUNC) &_fibermargin_refine_spatial_graph_cpp, 10},
+  {"_fibermargin_direct_refiner_cpp", (DL_FUNC) &_fibermargin_direct_refiner_cpp, 5},
+  {"_fibermargin_alpha_expansion_potts_cpp", (DL_FUNC) &_fibermargin_alpha_expansion_potts_cpp, 6},
+  {"_fibermargin_fiber_margin_cpp", (DL_FUNC) &_fibermargin_fiber_margin_cpp, 4},
   {NULL, NULL, 0}
 };
 
-extern "C" void R_init_marginSVM(DllInfo* dll) {
+extern "C" void R_init_fibermargin(DllInfo* dll) {
   R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
   R_useDynamicSymbols(dll, FALSE);
 }

@@ -22,12 +22,16 @@ simulate_spatial_clusters(
 
 \item{samples}{Number of independent tissues or sections.}
 
-\item{noise}{Fraction of labels to corrupt at random.}
+\item{noise}{Fraction of labels to corrupt at random. Each true class present
+in a specimen retains one correct exemplar; a rate that makes this
+impossible is rejected.}
 
 \item{seed}{Random seed.}
 }
 \value{
-A list with `xy`, `labels`, `truth`, and `samples`.
+A `spatial_refinement_benchmark` containing coordinates, noisy
+  labels, truth, sample identifiers, region, boundary, and sparse-region
+  indicators.
 }
 \description{
 Simulate labelled spatial clusters

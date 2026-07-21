@@ -1,4 +1,4 @@
 library(testthat)
-library(marginSVM)
+library(fibermargin)
 
-test_check("marginSVM")
+test_check("fibermargin")

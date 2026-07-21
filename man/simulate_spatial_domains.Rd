@@ -25,7 +25,9 @@ simulate_spatial_domains(
 
 \item{k}{Number of tissue domains.}
 
-\item{noise}{Fraction of initial labels to corrupt.}
+\item{noise}{Fraction of initial labels to corrupt. Each true class present
+in a specimen retains one correct exemplar; a rate that makes this
+impossible is rejected.}
 
 \item{dimensions}{Either 2 or 3. Pattern `layers3d` requires 3.}
 
@@ -45,7 +47,9 @@ particular class identifier.}
 \item{seed}{Random seed.}
 }
 \value{
-A list with `xy`, noisy `labels`, `truth`, `samples`, and `pattern`.
+A `spatial_refinement_benchmark` with coordinates, noisy labels,
+  truth, samples, geometry metadata, and boundary and sparse-region
+  indicators.
 }
 \description{
 Generates irregular 2D tissue sections or 3D tissue volumes with known domain

@@ -1,19 +1,27 @@
-Package: marginSVM
+Package: fibermargin
 Type: Package
-Title: Fast Spatial Refinement of Cluster Labels
-Version: 0.3.0
+Title: FiberMargin Categorical Mask and Spatial Label Refinement
+Version: 0.1
 Authors@R: person(given = "Stefano", family = "Cacciatore",
     email = "tkcaccia@gmail.com", role = c("aut", "cre"))
-Description: Refines noisy spatial cluster labels with overlapping local Nystrom
-    support vector machines, graph-integrated evidence, and edge-aware total-variation
-    decoding. The C++ implementation supports large two- and three-dimensional spatial
-    transcriptomics datasets, multiple tissue sections, automatic overlapping tiles,
-    diagnostics, and multiple CPU workers. Optional CUDA and Metal providers can
-    register through a stable backend interface.
+Author: Stefano Cacciatore [aut, cre]
+Maintainer: Stefano Cacciatore <tkcaccia@gmail.com>
+Description: Implements FiberMargin, a deterministic training-free operator for
+    repairing categorical masks and spatial labels from coordinates and labels
+    alone. Binary labels use a fixed local dyadic-volume ballot. For multiclass
+    labels, rotated space-filling-curve charts, two-sided class enclosure at
+    one fixed geometric transport range, and a class-balanced,
+    isolation-protected chart-disagreement admission rule provide pointwise
+    repair decisions and audit scores. The C++
+    engine supports two- and three-dimensional coordinates; specimens and
+    independent atlas charts can share a deterministic CPU worker budget.
+    Reproducible mask corruptions, planar and volumetric simulators,
+    damage-aware evaluation, and compact licensed DLPFC and CRC benchmarks
+    support assessment.
 License: MIT + file LICENSE
-URL: https://tkcaccia.github.io/marginSVM/,
-    https://github.com/tkcaccia/marginSVM
-BugReports: https://github.com/tkcaccia/marginSVM/issues
+URL: https://tkcaccia.github.io/fibermargin/,
+    https://github.com/tkcaccia/fibermargin
+BugReports: https://github.com/tkcaccia/fibermargin/issues
 Encoding: UTF-8
 Depends:
     R (>= 4.1.0)

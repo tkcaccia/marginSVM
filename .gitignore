@@ -2,6 +2,9 @@
 .RData
 .Rhistory
 .Rproj.user/
+API.key
+*.api-key
+*.secret.env
 ..Rcheck/
 marginSVM.Rcheck/
 marginSVM_*.tar.gz
@@ -12,7 +15,42 @@ src/*.so
 src/*.dll
 src/*.dylib
 
+# OpenEvolve uses an isolated Python environment and writes many checkpoints.
+.venv-openevolve/
+openevolve_search/output/
+openevolve_search/data/build/
+openevolve_search/__pycache__/
+openevolve_search/**/__pycache__/
+openevolve_search/*.pyc
+
 output/*
 !output/pdf/
 output/pdf/*
-!output/pdf/marginsvm-manuscript.pdf
+!output/pdf/marginsvm-jmlr-submission.pdf
+!output/docx/
+output/docx/*
+!output/docx/marginsvm-jmlr-manuscript.docx
+
+manuscript/*.aux
+manuscript/*.bbl
+manuscript/*.blg
+manuscript/*.fdb_latexmk
+manuscript/*.fls
+manuscript/*.log
+manuscript/*.out
+manuscript/marginsvm-jmlr-submission.pdf
+
+# Local development sweeps superseded by the frozen publication method.
+benchmarks/marginsvm_rare_crc_confirmation.R
+benchmarks/marginsvm_rare_region_protection.R
+benchmarks/results/marginsvm_next_ideas/
+benchmarks/results/marginsvm_rare_crc_confirmation/
+benchmarks/results/marginsvm_rare_region_protection/
+benchmarks/results/marginsvm_selective_budget/development_width_0.15_0.40/
+benchmarks/results/marginsvm_budget_crc_confirmation/rarity_0.50/
+benchmarks/results/marginsvm_budget_crc_confirmation/rarity_power_1/
+benchmarks/results/marginsvm_budget_crc_confirmation/tissue_budget/
+benchmarks/results/marginsvm_budget_crc_confirmation/trust_0.60/
+/doc/
+/Meta/
+data-raw/external/

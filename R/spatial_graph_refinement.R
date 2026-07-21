@@ -1,16 +1,15 @@
-#' Refine spatial cluster assignments
+#' Internal Potts-like ICM benchmark helper
 #'
-#' Repairs locally inconsistent cluster labels while preserving uncertain tissue
-#' boundaries. The default settings are inferred from the number of observations,
-#' so most analyses only need spatial coordinates and initial cluster labels.
+#' This private helper implements the transparent smoothing baseline used in the
+#' publication benchmarks. It is not a fibermargin variant or a user-facing method.
 #'
 #' @param xy Numeric matrix of 2D or 3D spatial coordinates.
 #' @param labels Initial cluster assignments, one per row of `xy`.
 #' @param samples Optional slide or sample identifier. Graphs are built separately
 #'   for each sample.
 #' @param execution Optional named list controlling execution. Supported entries
-#'   are `tiles`, `overlap`, `target_tile_size`, `workers`, `backend`, and
-#'   `strict_backend`. Use `tiles = "auto"` for overlapping tile-wise execution.
+#'   are `tiles`, `overlap`, `target_tile_size`, and `workers`. Use
+#'   `tiles = "auto"` for overlapping tile-wise execution.
 #' @param control Optional named list for advanced use. Supported entries are
 #'   `neighbors`, `iterations`, `consensus`, `preserve`, `margin`, and
 #'   `weighted`, and `current_support`. These controls are primarily intended for
@@ -23,9 +22,9 @@
 #' @noRd
 #' @examples
 #' sim <- simulate_spatial_domains(n = 2000, pattern = "jagged_stripes")
-#' refined <- refine_spatial_clusters(sim$xy, sim$labels)
+#' refined <- fibermargin:::.potts_icm_labels(sim$xy, sim$labels)
 #' mean(refined == sim$truth)
-refine_spatial_clusters <- function(xy, labels, samples = NULL, control = NULL, execution = NULL) {
+.potts_icm_labels <- function(xy, labels, samples = NULL, control = NULL, execution = NULL) {
   xy <- as.matrix(xy)
   storage.mode(xy) <- "double"
   if (!is.numeric(xy) || nrow(xy) < 3L || ncol(xy) < 2L || ncol(xy) > 3L || any(!is.finite(xy))) {
@@ -80,15 +79,13 @@ refine_spatial_clusters <- function(xy, labels, samples = NULL, control = NULL, 
   }
 
   execution <- .validate_spatial_execution(execution, ncol(xy))
-  backend <- .select_spatial_backend(execution$backend, execution$strict_backend)
   tiled <- !is.null(execution$tiles)
-  if (!tiled && backend == "cpu") {
+  if (!tiled) {
     native <- .refine_spatial_graph_native(
       xy, as.integer(labels), as.integer(samples), settings
     )
-    return(.format_spatial_refinement(native, labels, rownames(xy), backend, 1L, NULL))
+    return(.format_spatial_refinement(native, labels, rownames(xy), 1L, NULL))
   }
-  if (!tiled) execution$tiles <- rep.int(1L, ncol(xy))
 
   tasks <- .make_spatial_tile_tasks(
     xy, labels, samples, execution$tiles, execution$overlap,
@@ -101,10 +98,6 @@ refine_spatial_clusters <- function(xy, labels, samples = NULL, control = NULL, 
     workers <- max(1L, min(length(tasks), available - 1L))
   }
   workers <- max(1L, min(as.integer(workers), length(tasks)))
-  if (backend != "cpu" && workers > 1L) {
-    warning("Accelerator backends process tiles in one R process; setting `workers = 1`.", call. = FALSE)
-    workers <- 1L
-  }
   if (.Platform$OS.type == "windows" && workers > 1L) {
     warning("Multi-process tile execution currently uses forked workers and is unavailable on Windows; setting `workers = 1`.", call. = FALSE)
     workers <- 1L
@@ -114,20 +107,10 @@ refine_spatial_clusters <- function(xy, labels, samples = NULL, control = NULL, 
     halo <- task$halo
     local_settings <- settings
     local_settings$neighbors <- task$neighbors
-    if (backend == "cpu") {
-      result <- .refine_spatial_graph_native(
-        xy[halo, , drop = FALSE], as.integer(labels)[halo],
-        rep.int(1L, length(halo)), local_settings
-      )
-    } else {
-      provider <- .spatial_backend_registry[[backend]]
-      result <- provider(
-        xy = xy[halo, , drop = FALSE],
-        labels = as.integer(labels)[halo],
-        control = local_settings
-      )
-      result <- .validate_backend_result(result, length(halo), nlevels(labels), task$neighbors)
-    }
+    result <- .refine_spatial_graph_native(
+      xy[halo, , drop = FALSE], as.integer(labels)[halo],
+      rep.int(1L, length(halo)), local_settings
+    )
     core_position <- match(task$core, halo)
     list(
       core = task$core,
@@ -170,12 +153,12 @@ refine_spatial_clusters <- function(xy, labels, samples = NULL, control = NULL, 
   attr(output, "neighbors") <- vapply(tasks, `[[`, integer(1L), "neighbors")
   tile_diagnostics <- do.call(rbind, diagnostics)
   rownames(tile_diagnostics) <- NULL
-  .format_spatial_refinement(output, labels, rownames(xy), backend, workers, tile_diagnostics)
+  .format_spatial_refinement(output, labels, rownames(xy), workers, tile_diagnostics)
 }
 
 .refine_spatial_graph_native <- function(xy, labels, samples, settings) {
   .Call(
-    "_marginSVM_refine_spatial_graph_cpp",
+    "_fibermargin_refine_spatial_graph_cpp",
     xy,
     labels,
     samples,
@@ -186,18 +169,63 @@ refine_spatial_clusters <- function(xy, labels, samples = NULL, control = NULL, 
     as.double(settings$margin),
     isTRUE(settings$weighted),
     as.double(settings$current_support),
-    PACKAGE = "marginSVM"
+    PACKAGE = "fibermargin"
   )
 }
 
-.refine_published_labels <- function(xy, labels, samples, method = c("graphst", "spagcn"), neighbors = NULL) {
-  method <- match.arg(method)
-  if (is.null(neighbors)) neighbors <- if (method == "graphst") 50L else 6L
+# Standard alpha-expansion optimizer for a fixed categorical Potts energy. This
+# private benchmark helper is deliberately separate from FiberMargin: it has a
+# local pairwise smoothness prior and no selective margin mechanism.
+.alpha_expansion_potts_labels <- function(
+    xy, labels, samples = NULL, neighbors = 8L, unary = 5, cycles = 2L) {
+  xy <- as.matrix(xy)
+  storage.mode(xy) <- "double"
+  if (!is.numeric(xy) || nrow(xy) < 3L || ncol(xy) < 2L || ncol(xy) > 3L ||
+      any(!is.finite(xy))) {
+    stop("`xy` must be a finite numeric matrix with 2 or 3 columns and at least 3 rows.",
+         call. = FALSE)
+  }
+  if (length(labels) != nrow(xy) || anyNA(labels)) {
+    stop("`labels` must contain one non-missing value per row of `xy`.", call. = FALSE)
+  }
+  labels <- as.factor(labels)
+  if (nlevels(labels) < 2L) return(labels)
+  if (is.null(samples)) {
+    samples <- factor(rep.int("sample1", nrow(xy)))
+  } else {
+    if (length(samples) != nrow(xy) || anyNA(samples)) {
+      stop("`samples` must contain one non-missing value per row of `xy`.",
+           call. = FALSE)
+    }
+    samples <- as.factor(samples)
+  }
+  neighbors <- as.integer(neighbors)
+  cycles <- as.integer(cycles)
+  if (length(neighbors) != 1L || is.na(neighbors) || neighbors < 1L ||
+      length(cycles) != 1L || is.na(cycles) || cycles < 1L ||
+      length(unary) != 1L || !is.finite(unary) || unary <= 0) {
+    stop("Invalid alpha-expansion Potts settings.", call. = FALSE)
+  }
+
   native <- .Call(
-    "_marginSVM_direct_refiner_cpp",
-    as.matrix(xy), as.integer(labels), as.integer(samples),
-    if (method == "graphst") 0L else 1L, as.integer(neighbors),
-    PACKAGE = "marginSVM"
+    "_fibermargin_alpha_expansion_potts_cpp",
+    xy, as.integer(labels), as.integer(samples), neighbors,
+    as.double(unary), cycles, PACKAGE = "fibermargin"
+  )
+  output <- factor(levels(labels)[as.integer(native)], levels = levels(labels))
+  names(output) <- rownames(xy)
+  attr(output, "neighbors") <- attr(native, "neighbors")
+  attr(output, "changes") <- attr(native, "changes")
+  attr(output, "energy") <- attr(native, "energy")
+  attr(output, "unary") <- attr(native, "unary")
+  output
+}
+
+.direct_neighbor_mode_labels <- function(xy, labels, samples, neighbors) {
+  native <- .Call(
+    "_fibermargin_direct_refiner_cpp",
+    as.matrix(xy), as.integer(labels), as.integer(samples), 0L,
+    as.integer(neighbors), PACKAGE = "fibermargin"
   )
   output <- factor(levels(labels)[as.integer(native)], levels = levels(labels))
   names(output) <- rownames(xy)
@@ -205,7 +233,32 @@ refine_spatial_clusters <- function(xy, labels, samples = NULL, control = NULL, 
   output
 }
 
-.format_spatial_refinement <- function(native, labels, row_names, backend, workers, tiles) {
+# Fixed-k, one-pass local-mode reference control for benchmark use. The same
+# unweighted neighbour-mode kernel underlies the direct GraphST correction rule,
+# but this helper deliberately does not present it as a published method.
+.local_modal_filter_labels <- function(xy, labels, samples, neighbors) {
+  .direct_neighbor_mode_labels(xy, labels, samples, neighbors)
+}
+
+.refine_published_labels <- function(xy, labels, samples, method = c("graphst", "spagcn"), neighbors = NULL) {
+  method <- match.arg(method)
+  if (is.null(neighbors)) neighbors <- if (method == "graphst") 50L else 6L
+  if (method == "graphst") {
+    return(.direct_neighbor_mode_labels(xy, labels, samples, neighbors))
+  }
+  native <- .Call(
+    "_fibermargin_direct_refiner_cpp",
+    as.matrix(xy), as.integer(labels), as.integer(samples),
+    1L, as.integer(neighbors),
+    PACKAGE = "fibermargin"
+  )
+  output <- factor(levels(labels)[as.integer(native)], levels = levels(labels))
+  names(output) <- rownames(xy)
+  attr(output, "neighbors") <- attr(native, "neighbors")
+  output
+}
+
+.format_spatial_refinement <- function(native, labels, row_names, workers, tiles) {
   diagnostics <- attributes(native)
   refined <- factor(levels(labels)[as.integer(native)], levels = levels(labels))
   names(refined) <- row_names
@@ -213,7 +266,6 @@ refine_spatial_clusters <- function(xy, labels, samples = NULL, control = NULL, 
   attr(refined, "support") <- diagnostics$confidence
   attr(refined, "changes") <- diagnostics$changes
   attr(refined, "neighbors") <- diagnostics$neighbors
-  attr(refined, "backend") <- backend
   attr(refined, "workers") <- workers
   attr(refined, "tiles") <- tiles
   refined
@@ -222,7 +274,7 @@ refine_spatial_clusters <- function(xy, labels, samples = NULL, control = NULL, 
 .validate_spatial_execution <- function(execution, dimensions) {
   defaults <- list(
     tiles = NULL, overlap = 0.15, target_tile_size = 100000L,
-    workers = NULL, backend = "auto", strict_backend = FALSE
+    workers = NULL
   )
   if (is.null(execution)) execution <- list()
   if (!is.list(execution) || (length(execution) && is.null(names(execution)))) {
@@ -246,12 +298,9 @@ refine_spatial_clusters <- function(xy, labels, samples = NULL, control = NULL, 
   out$target_tile_size <- as.integer(out$target_tile_size)
   if (!is.finite(out$overlap) || length(out$overlap) != 1L || out$overlap < 0 || out$overlap >= 1 ||
       is.na(out$target_tile_size) || out$target_tile_size < 100L ||
-      (!is.null(out$workers) && (length(out$workers) != 1L || is.na(as.integer(out$workers)) || as.integer(out$workers) < 1L)) ||
-      length(out$strict_backend) != 1L || is.na(out$strict_backend)) {
+      (!is.null(out$workers) && (length(out$workers) != 1L || is.na(as.integer(out$workers)) || as.integer(out$workers) < 1L))) {
     stop("Invalid settings in `execution`.", call. = FALSE)
   }
-  out$backend <- match.arg(tolower(out$backend), c("auto", "cpu", "cuda", "metal"))
-  out$strict_backend <- isTRUE(out$strict_backend)
   out
 }
 
@@ -322,78 +371,6 @@ refine_spatial_clusters <- function(xy, labels, samples = NULL, control = NULL, 
   tasks
 }
 
-.spatial_backend_registry <- new.env(parent = emptyenv())
-
-#' Register an optional accelerator backend
-#'
-#' Provider packages can register CUDA or Metal implementations without changing
-#' the stable user interface. A provider receives `xy`, integer `labels`, and the
-#' validated refinement `control` list and returns integer labels with attributes
-#' `confidence`, `changes`, and `neighbors`.
-#'
-#' @param backend Either `"cuda"` or `"metal"`.
-#' @param provider Backend function, or `NULL` to unregister it.
-#' @return Invisibly, the registered backend name.
-#' @keywords internal
-#' @noRd
-register_spatial_backend <- function(backend = c("cuda", "metal"), provider) {
-  backend <- match.arg(backend)
-  if (is.null(provider)) {
-    if (exists(backend, envir = .spatial_backend_registry, inherits = FALSE)) {
-      rm(list = backend, envir = .spatial_backend_registry)
-    }
-  } else {
-    if (!is.function(provider)) stop("`provider` must be a function or `NULL`.", call. = FALSE)
-    assign(backend, provider, envir = .spatial_backend_registry)
-  }
-  invisible(backend)
-}
-
-#' Report available spatial refinement backends
-#'
-#' @return A data frame reporting backend availability and implementation source.
-#' @keywords internal
-#' @noRd
-spatial_backend_capabilities <- function() {
-  registered <- unname(vapply(c("cuda", "metal"), exists, logical(1L),
-    envir = .spatial_backend_registry, inherits = FALSE))
-  data.frame(
-    backend = c("cpu", "cuda", "metal"),
-    available = c(TRUE, registered),
-    source = c("built-in C++", ifelse(registered, "registered provider", "not registered")),
-    stringsAsFactors = FALSE
-  )
-}
-
-.select_spatial_backend <- function(requested, strict) {
-  capabilities <- spatial_backend_capabilities()
-  available <- capabilities$backend[capabilities$available]
-  if (requested == "auto") {
-    preference <- if (Sys.info()[["sysname"]] == "Darwin") c("metal", "cuda", "cpu") else c("cuda", "metal", "cpu")
-    return(preference[preference %in% available][1L])
-  }
-  if (requested %in% available) return(requested)
-  message <- sprintf("The `%s` backend is not registered; using the built-in CPU backend.", requested)
-  if (strict) stop(message, call. = FALSE)
-  warning(message, call. = FALSE)
-  "cpu"
-}
-
-.validate_backend_result <- function(result, n, classes, neighbors) {
-  result_attributes <- attributes(result)
-  result <- as.integer(result)
-  if (length(result) != n || anyNA(result) || any(result < 1L | result > classes)) {
-    stop("Accelerator backend returned invalid labels.", call. = FALSE)
-  }
-  confidence <- result_attributes$confidence
-  if (is.null(confidence)) confidence <- rep(NA_real_, n)
-  if (length(confidence) != n) stop("Accelerator backend returned invalid support values.", call. = FALSE)
-  attr(result, "confidence") <- confidence
-  attr(result, "changes") <- if (is.null(result_attributes$changes)) integer() else result_attributes$changes
-  attr(result, "neighbors") <- if (is.null(result_attributes$neighbors)) neighbors else result_attributes$neighbors
-  result
-}
-
 #' Simulate spatial tissue domains with challenging geometry
 #'
 #' Generates irregular 2D tissue sections or 3D tissue volumes with known domain
@@ -402,7 +379,9 @@ spatial_backend_capabilities <- function() {
 #' @param n Number of observations.
 #' @param pattern Domain geometry. See Details.
 #' @param k Number of tissue domains.
-#' @param noise Fraction of initial labels to corrupt.
+#' @param noise Fraction of initial labels to corrupt. Each true class present
+#'   in a specimen retains one correct exemplar; a rate that makes this
+#'   impossible is rejected.
 #' @param dimensions Either 2 or 3. Pattern `layers3d` requires 3.
 #' @param samples Number of independent slides or samples.
 #' @param noise_type One of `"random"`, `"boundary"`, `"patch"`, or `"region"`.
@@ -419,7 +398,9 @@ spatial_backend_capabilities <- function() {
 #' rings, spiral arms, branching sectors, lobes, rare islands, disconnected
 #' domains, thin layers, interleaved microdomains, and curved 3D layers.
 #'
-#' @return A list with `xy`, noisy `labels`, `truth`, `samples`, and `pattern`.
+#' @return A `spatial_refinement_benchmark` with coordinates, noisy labels,
+#'   truth, samples, geometry metadata, and boundary and sparse-region
+#'   indicators.
 #' @export
 simulate_spatial_domains <- function(n = 50000L,
                                      pattern = c(
@@ -629,41 +610,59 @@ simulate_spatial_domains <- function(n = 50000L,
 
   labels_id <- truth_id
   n_noise <- floor(noise * n)
+  corrupt <- integer()
   if (n_noise > 0L) {
     if (noise_type == "boundary") {
-      corrupt <- order(boundary_proximity)[seq_len(n_noise)]
+      priority <- order(boundary_proximity)
     } else if (noise_type %in% c("patch", "region")) {
       center_rows <- sample.int(n, max(2L, ceiling(n_noise / max(25L, sqrt(n)))))
       patch_distance <- vapply(center_rows, function(i) rowSums((sweep(xy, 2L, xy[i, ], "-"))^2), numeric(n))
-      corrupt <- order(apply(patch_distance, 1L, min))[seq_len(n_noise)]
+      priority <- order(apply(patch_distance, 1L, min))
     } else {
-      corrupt <- sample.int(n, n_noise)
+      initial <- sample.int(n, n_noise)
+      priority <- c(initial, setdiff(seq_len(n), initial))
     }
+    corrupt <- .select_class_preserving_corruption(
+      priority, n_noise, truth_id, sample_id, boundary_proximity
+    )
     replacement <- if (noise_type == "region") {
-      rep(sample.int(k, 1L), n_noise)
+      rep(sample.int(k, 1L), length(corrupt))
     } else {
-      sample.int(k, n_noise, replace = TRUE)
+      sample.int(k, length(corrupt), replace = TRUE)
     }
     same <- replacement == labels_id[corrupt]
     replacement[same] <- replacement[same] %% k + 1L
     labels_id[corrupt] <- replacement
   }
+  .validate_class_anchors(
+    truth_id, labels_id, sample_id, context = "simulate_spatial_domains()"
+  )
 
   colnames(xy) <- c("x", "y", if (dimensions == 3L) "z")
   rownames(xy) <- paste0("spot", seq_len(n))
-  list(
+  region <- factor(paste0("region", truth_id), levels = paste0("region", seq_len(k)))
+  region_counts <- table(region)
+  boundary <- boundary_proximity <= stats::quantile(
+    boundary_proximity, 0.20, names = FALSE
+  )
+  sparse <- region == names(which.min(region_counts))[1L]
+  output <- list(
     xy = xy,
     labels = factor(paste0("cluster", labels_id), levels = paste0("cluster", seq_len(k))),
     truth = factor(paste0("cluster", truth_id), levels = paste0("cluster", seq_len(k))),
-    region = factor(paste0("region", truth_id), levels = paste0("region", seq_len(k))),
+    region = region,
     samples = sample_id,
     pattern = pattern,
     noise_type = noise_type,
     density_profile = density_name,
     region_density = stats::setNames(region_density, paste0("cluster", seq_len(k))),
-    region_counts = table(factor(paste0("cluster", truth_id),
-                                 levels = paste0("cluster", seq_len(k)))),
+    region_counts = region_counts,
     boundary_proximity = boundary_proximity,
-    corrupted = seq_len(n) %in% if (n_noise > 0L) corrupt else integer()
+    boundary = boundary,
+    sparse = sparse,
+    corrupted = labels_id != truth_id
   )
+  names(output$labels) <- names(output$truth) <- names(output$samples) <- rownames(xy)
+  class(output) <- c("spatial_refinement_benchmark", "list")
+  output
 }

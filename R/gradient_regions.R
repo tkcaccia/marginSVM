@@ -15,8 +15,9 @@
 #'   tissue areas. Use `"uniform"`, `"moderate"`, `"strong"`, `"extreme"`,
 #'   or a positive numeric vector of length four.
 #'
-#' @return A list containing `xy`, mixed `labels`, reference `truth`, `samples`,
-#'   `area`, and normalized `boundary_proximity`.
+#' @return A `spatial_refinement_benchmark` containing `xy`, mixed `labels`,
+#'   reference `truth`, `samples`, `area`, boundary indicators, and
+#'   sparse-region indicators.
 #' @export
 #' @examples
 #' sim <- simulate_gradient_regions(n = 4000, minority = 0.05, samples = 2)
@@ -122,19 +123,34 @@ simulate_gradient_regions <- function(n = 50000L,
       labels[contaminated] <- minority_names[region]
     }
   }
+  .validate_class_anchors(
+    truth, labels, sample_id, context = "simulate_gradient_regions()"
+  )
 
   rownames(xy) <- paste0("spot", seq_len(n))
   colnames(xy) <- c("x", "y", "z")[seq_len(dimensions)]
   names(labels) <- names(truth) <- names(sample_id) <- rownames(xy)
-  list(
+  area_factor <- factor(area, levels = 1:4, labels = paste0("area", 1:4))
+  area_counts <- table(area_factor)
+  boundary <- boundary_proximity <= stats::quantile(
+    boundary_proximity, 0.20, names = FALSE
+  )
+  sparse <- area_factor == names(which.min(area_counts))[1L]
+  output <- list(
     xy = xy,
     labels = labels,
     truth = truth,
     samples = sample_id,
-    area = factor(area, levels = 1:4, labels = paste0("area", 1:4)),
+    area = area_factor,
     density_profile = density_name,
     area_density = stats::setNames(area_density, paste0("area", 1:4)),
-    area_counts = table(factor(area, levels = 1:4, labels = paste0("area", 1:4))),
-    boundary_proximity = boundary_proximity
+    area_counts = area_counts,
+    boundary_proximity = boundary_proximity,
+    boundary = boundary,
+    sparse = sparse,
+    corrupted = labels != truth,
+    pattern = "gradient_A-B-C"
   )
+  class(output) <- c("spatial_refinement_benchmark", "list")
+  output
 }

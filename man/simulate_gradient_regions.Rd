@@ -32,8 +32,9 @@ tissue areas. Use `"uniform"`, `"moderate"`, `"strong"`, `"extreme"`,
 or a positive numeric vector of length four.}
 }
 \value{
-A list containing `xy`, mixed `labels`, reference `truth`, `samples`,
-  `area`, and normalized `boundary_proximity`.
+A `spatial_refinement_benchmark` containing `xy`, mixed `labels`,
+  reference `truth`, `samples`, `area`, boundary indicators, and
+  sparse-region indicators.
 }
 \description{
 Generates four ordered tissue areas whose reference classes are `A`, `B`,

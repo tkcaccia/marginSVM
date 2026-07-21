@@ -1,6 +1,6 @@
-url: https://tkcaccia.github.io/marginSVM/
+url: https://tkcaccia.github.io/fibermargin/
 destination: site
-title: marginSVM
+title: FiberMargin
 
 template:
   bootstrap: 5
@@ -15,10 +15,10 @@ template:
       google: Source Code Pro
 
 home:
-  title: "marginSVM: fast spatial cluster-label refinement"
+  title: "FiberMargin: training-free categorical mask repair"
   description: >
-    Multiscale adaptive refinement with graph-integrated Nystrom support
-    vector machines for large 2D and 3D spatial transcriptomics datasets.
+    A deterministic C++ operator for repairing categorical masks and spatial
+    labels from 2D or 3D coordinates and labels alone.
 
 navbar:
   structure:
@@ -33,21 +33,39 @@ navbar:
       href: articles/benchmarks.html
     manuscript:
       text: Manuscript
-      href: https://github.com/tkcaccia/marginSVM/blob/main/output/pdf/marginsvm-manuscript.pdf
+      href: https://github.com/tkcaccia/fibermargin/blob/main/output/pdf/fibermargin-jmlr-manuscript.pdf
 
 reference:
-  - title: Refinement
-    desc: The production marginSVM interface and backend information.
+  - title: Repair and Refinement
+    desc: Minimal interfaces for regular masks and irregular spatial fields.
     contents:
-      - refine_spatial_svm
-      - spatial_svm_backend_capabilities
-      - register_spatial_svm_backend
+      - clean_categorical_mask
+      - refine_spatial_labels
+  - title: Mask Evaluation
+    desc: Reproducible mask corruptions and damage-aware evaluation.
+    contents:
+      - corrupt_categorical_mask
+      - evaluate_mask_cleaning
   - title: Simulation
-    desc: Reproducible spatial-domain and gradient-region generators.
+    desc: Reproducible planar, gradient, junction, and volumetric generators.
     contents:
       - simulate_spatial_clusters
       - simulate_spatial_domains
       - simulate_gradient_regions
+      - simulate_complex_spatial_domains
+      - simulate_volumetric_domains
+  - title: Evaluation
+    desc: Common benchmark construction, metrics, and timed method comparison.
+    contents:
+      - spatial_benchmark
+      - evaluate_spatial_refinement
+      - benchmark_spatial_refiners
+  - title: Benchmark Data
+    desc: Licensed real-data benchmark access and provenance.
+    contents:
+      - available_spatial_benchmarks
+      - load_spatial_benchmark
+      - dlpfc_benchmark
 
 footer:
   structure:
