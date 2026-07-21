@@ -1,0 +1,66 @@
+---
+title: "FiberMargin Reference Manual"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{fibermargin_reference}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+This vignette summarizes the package interface for quick look-up while working in R.
+
+## Functions
+
+### Refinement
+
+- `refine_spatial_labels(xy, labels, samples = NULL, workers = NULL)`  
+  Refines noisy labels on 2D/3D coordinates.
+
+- `clean_categorical_mask(mask, samples = NULL, workers = NULL)`  
+  Cleans a categorical matrix (2D) or array (3D).
+
+### Simulation
+
+- `simulate_spatial_domains(...)`  
+- `simulate_complex_spatial_domains(...)`  
+- `simulate_spatial_clusters(...)`  
+- `simulate_gradient_regions(...)`  
+- `simulate_volumetric_domains(...)`
+
+All simulators return a `spatial_refinement_benchmark` object with `xy`,
+`labels`, `truth`, `samples`, and optional `boundary`/`sparse` fields.
+
+### Evaluation
+
+- `evaluate_spatial_refinement(truth, initial, refined, ...)`  
+  Computes recovery, consistency, boundary, sparse-region, and damage/repair
+  diagnostics.
+
+- `evaluate_mask_cleaning(reference, initial, cleaned, ...)`  
+  Computes mean IoU, boundary IoU, and damage/repair decomposition for masks.
+
+### Benchmarking
+
+- `benchmark_spatial_refiners(data, methods, include_initial = TRUE, seed = 1L, ...)`  
+  Runs multiple methods on one or more identical benchmark inputs.
+
+- `spatial_benchmark(xy, labels, truth, samples, ...)`  
+  Validates and constructs a benchmark object.
+
+- `available_spatial_benchmarks()`  
+  Lists bundled datasets and licensing information.
+
+- `load_spatial_benchmark(name, scenario)`  
+  Loads a bundled real scenario.
+
+## Scoring glossary
+
+- `accuracy`: overall corrected agreement.
+- `accuracy_gain`: improvement over input labeling.
+- `correction_recall`: fraction of wrong labels that become correct.
+- `damage_rate`: fraction of correct labels that become wrong.
+- `worst_recall`: minimum class recall.
+- `boundary_accuracy`: conditional accuracy on boundary-labeled spots.
+- `sparse_region_accuracy`: conditional accuracy on a sparse reference region.
+- `ari`: adjusted Rand index.
+- `n`: number of observations.

@@ -1,0 +1,154 @@
+---
+title: "FiberMargin"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{fibermargin}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 8,
+  fig.height = 3
+)
+library(fibermargin)
+```
+
+## What FiberMargin does
+
+FiberMargin is a deterministic, training-free routine that repairs noisy categorical
+labels using only spatial coordinates and observed class labels.
+
+- `xy`: 2D/3D coordinates, one row per spot.
+- `labels`: observed class labels.
+- `samples`: optional section/specimen identifier. Different specimens are refined
+  independently.
+- `workers`: optional CPU budget.
+
+The returned value is a factor with the same levels and row names as `labels`, and
+attributes with pointwise diagnostics.
+
+## Quick start
+
+```{r quick-start}
+sim <- simulate_gradient_regions(
+  n = 4000L,
+  minority = 0.10,
+  samples = 2L,
+  seed = 12L
+)
+
+refined <- refine_spatial_labels(
+  xy = sim$xy,
+  labels = sim$labels,
+  samples = sim$samples,
+  workers = 1L
+)
+
+c(
+  input_accuracy = mean(sim$labels == sim$truth),
+  refined_accuracy = mean(refined == sim$truth),
+  changed = mean(refined != sim$labels)
+)
+```
+
+## Diagnostics
+
+```{r diagnostics}
+str(
+  list(
+    candidate = head(attr(refined, "candidate")),
+    changed = head(attr(refined, "changed")),
+    repair_margin = head(attr(refined, "repair_margin"))
+  )
+)
+```
+
+- `candidate`: local best candidate class at each spot.
+- `margin_score`: local support contrast for the candidate.
+- `required`: adaptive acceptance threshold.
+- `repair_margin`: `margin_score - required`; accepted changes have non-negative
+  margin.
+- `atlas_dispersion`: directional view disagreement.
+- `isolation`: local isolation protection factor.
+- `changed`: whether the output label differs from the input label.
+
+## Clean a categorical mask
+
+For 2D masks and 3D arrays, mask cleaning uses the same coordinates-only
+refiner. Missing cells are preserved.
+
+```{r clean-mask}
+truth <- matrix(rep(c("background", "region"), each = 3200L), nrow = 80)
+noisy <- corrupt_categorical_mask(
+  truth,
+  mechanism = "boundary",
+  rate = 0.15,
+  seed = 19L
+)
+cleaned <- clean_categorical_mask(noisy, workers = 1L)
+
+evaluate_mask_cleaning(
+  reference = truth,
+  initial = noisy,
+  cleaned = cleaned,
+  method = "FiberMargin"
+)
+```
+
+## Benchmark helper
+
+```{r benchmark-example, eval=FALSE}
+bench <- simulate_spatial_domains(
+  n = 6000L,
+  pattern = "jagged_stripes",
+  noise = 0.20,
+  samples = 2L,
+  seed = 5L
+)
+
+benchmark_spatial_refiners(
+  bench,
+  methods = list(
+    FiberMargin = refine_spatial_labels,
+    InitialOnly = function(xy, labels, ...) labels
+  ),
+  include_initial = TRUE,
+  seed = 1L
+)
+```
+
+## Real-data flow
+
+```{r real-data}
+available_spatial_benchmarks()
+dlpfc <- load_spatial_benchmark("dlpfc", scenario = 1L)
+
+refined <- refine_spatial_labels(
+  dlpfc$xy,
+  dlpfc$labels,
+  samples = dlpfc$samples,
+  workers = 2L
+)
+
+evaluate_spatial_refinement(
+  truth = dlpfc$truth,
+  initial = dlpfc$labels,
+  refined = refined,
+  boundary = dlpfc$boundary,
+  sparse = dlpfc$sparse,
+  method = "FiberMargin"
+)
+```
+
+## Practical notes
+
+- Keep defaults unless you have a strong reason to modify internal options.
+- Use `workers` when processing many independent specimens.
+- Report both aggregate scores (`accuracy`, `ari`) and failure-mode scores
+  (`damage_rate`, `correction_recall`, `boundary_accuracy`, `sparse_region_accuracy`).

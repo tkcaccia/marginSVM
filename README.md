@@ -150,5 +150,7 @@ are under `benchmarks/results/fibermargin_final_enclosure_real_matrix_v2/`.
 Additional simulation and mask panels are retained in the repository and are
 re-evaluated only when the production source changes.
 
-See `vignette("fibermargin", package = "fibermargin")` for the complete workflow and
-`vignette("benchmarks", package = "fibermargin")` for the validation design.
+See `vignette("fibermargin", package = "fibermargin")` for the workflow,
+`vignette("benchmarks", package = "fibermargin")` for benchmark design,
+and `vignette("fibermargin_reference", package = "fibermargin")` for the package
+reference API.
