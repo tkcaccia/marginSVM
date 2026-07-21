@@ -1,38 +1,32 @@
 #' Refine noisy categorical labels on a spatial domain
 #'
-#' `refine_spatial_labels()` applies FiberMargin, a deterministic selective
-#' two-sided enclosure operator for two- or three-dimensional coordinates.
-#' Each route first forms a rival-versus-observed local evidence contrast, then
-#' applies the same candidate-first margin admission rule. For multiclass
-#' labels, each rotated Hilbert path transports unit class indicators from both
-#' directions.
-#' A class receives the two-sided enclosure score
-#' `(sqrt(left) + sqrt(right))^2`. A fixed two-sided chart-dispersion margin,
-#' with local-gap and class-balance protection, admits only supported changes.
-#' For binary labels, it is a fixed local dyadic-volume ballot with a one-vote
-#' barrier.
-#' Each specimen is processed independently, so unrelated tissues cannot
-#' exchange label evidence. A specimen with zero coordinate extent is retained
-#' unchanged because it has no spatial ordering. The method fixes its binary
-#' local volume, multiclass path atlas, central transport range, and decision
-#' rule internally.
+#' `refine_spatial_labels()` applies FiberMargin to a coordinate-indexed label
+#' field. The function is deterministic: no training phase is run and all route
+#' constants are fixed internally. For multiclass data, each class receives a
+#' two-sided local evidence score from short directional neighborhood sweeps; in
+#' the binary case it applies the analogous dyadic-volume ballot rule.
+#'
+#' The method can process multiple specimens at once. Each specimen is refined
+#' independently from the others; labels are never shared across specimens. A
+#' specimen with no spatial extent is returned unchanged.
 #'
 #' @param xy Numeric matrix with two or three spatial coordinates per row.
 #' @param labels Initial categorical assignment for every row of `xy`.
 #' @param samples Optional specimen identifier. Different specimens are refined
 #'   independently.
 #' @param workers Optional CPU budget used across specimens and independent
-#'   spatial charts. `NULL` chooses up to four physical cores.
+#'   spatial charts. `NULL` uses up to four physical cores when possible.
 #'
 #' @return A factor with the levels and row names of `labels`. Attributes
 #'   `candidate`, `margin_score`, `required`, `repair_margin`,
 #'   `atlas_dispersion`, `isolation`, and `changed` contain pointwise
-#'   diagnostics. `margin_score` is an uncalibrated evidence contrast, not a
-#'   probability or expected loss. `isolation` is a deterministic local-gap
+#'   diagnostics. `margin_score` is a local support contrast on the internal
+#'   coordinate lattice, `repair_margin` is the difference between
+#'   `margin_score` and the adaptive admission threshold, and `changed`
+#'   marks updated sites. `isolation` is a deterministic local-gap
 #'   protection factor in the multiclass route (one for the binary ballot). A
-#'   candidate is accepted exactly when it
-#'   differs from the observed label and `repair_margin = margin_score -
-#'   required` is nonnegative.
+#'   candidate is accepted exactly when it differs from the observed label and
+#'   `repair_margin` is nonnegative.
 #' @export
 #' @examples
 #' sim <- simulate_gradient_regions(n = 2000, samples = 2)

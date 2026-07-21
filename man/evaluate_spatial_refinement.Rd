@@ -37,17 +37,17 @@ regions define sparse- and dense-region accuracy when `sparse` is omitted.}
 A one-row data frame containing the evaluation measures.
 }
 \description{
-Computes complementary measures of label recovery, class balance, boundary
-behavior, sparse-region behavior, and unintended damage. All measures compare
-a refined assignment with a fixed reference and the same initial assignment.
+Computes primary and failure-mode metrics for label repair. Returned measures
+include recovery (accuracy and adjusted Rand index), class imbalance robustness
+(macro and worst recall), boundary/sparse reliability, and damage.
 }
 \details{
-`correction_recall` is the fraction of initially wrong labels repaired.
-`damage_rate` is the fraction of initially correct labels made wrong.
-`changed_precision` is the fraction of changed labels that are correct after
-refinement. Empty strata are reported as `NA` rather than silently scored as
-zero. Adjusted Rand index is calculated internally and does not require an
-additional package.
+`correction_recall` is the fraction of initially incorrect labels that are
+repaired. `damage_rate` is the fraction of initially correct labels that are
+flipped to an incorrect label. `changed_precision` is the fraction of
+modified sites that are correct after refinement. Empty strata are reported as
+`NA` rather than imputed as zero. Adjusted Rand index is calculated directly
+from the vectors and does not require an external package.
 }
 \examples{
 truth <- factor(c("A", "A", "B", "B"))

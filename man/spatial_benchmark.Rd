@@ -28,10 +28,10 @@ observation.}
 
 \item{boundary}{Optional logical vector marking boundary observations.}
 
-\item{regions}{Optional region identifier used to identify the sparsest and
-densest regions.}
+\item{regions}{Optional region identifier used for defining sparse-versus-dense
+accuracy when `sparse` is not supplied.}
 
-\item{sparse}{Optional logical vector marking observations in sparse regions.}
+\item{sparse}{Optional logical vector marking a user-provided sparse subset.}
 
 \item{name}{Optional benchmark name.}
 
@@ -41,8 +41,10 @@ densest regions.}
 An object of class `spatial_refinement_benchmark`.
 }
 \description{
-Creates the common data structure used by the simulation, evaluation, and
-    benchmarking functions in fibermargin.
+Creates a validated benchmark object that is consumed by simulations,
+refinement runs, and benchmarking utilities. All fields are aligned by spot
+index, so every function in the package sees the same coordinates,
+labels, and optional evaluation masks.
 }
 \examples{
 sim <- simulate_spatial_domains(n = 500, pattern = "jagged_stripes")

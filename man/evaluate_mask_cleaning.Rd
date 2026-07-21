@@ -17,5 +17,5 @@ evaluate_mask_cleaning(
 \item{elapsed}{Optional elapsed runtime in seconds.}
 \item{method}{Optional method name included in the returned row.}
 }
-\value{A one-row data frame containing overlap, boundary, rare-class, repair, and damage measures.}
-\description{Evaluates a cleaned mask using multiclass overlap, one-grid-step Boundary IoU, rare-class preservation, and the exact correction-damage decomposition of accuracy.}
+\value{A one-row data frame containing class-aware overlap, boundary agreement, rare-class, correction, and damage measures.}
+\description{Evaluates a cleaned mask against a fixed reference and noisy input mask. The output includes overlap scores, class-boundary agreement, and correction/damage decomposition.}

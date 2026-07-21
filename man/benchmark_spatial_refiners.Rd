@@ -25,7 +25,7 @@ accepts `...`.}
 \item{seed}{Integer seed reset before each method run.}
 
 \item{on_error}{Either `"stop"` or `"record"`. The latter returns an `error`
-column and `NA` performance measures for a failed method.}
+column and `NA` performance values for a failed method rather than aborting.}
 }
 \value{
 A data frame with one row per dataset and method.
@@ -33,7 +33,8 @@ A data frame with one row per dataset and method.
 \description{
 Runs one or more refinement functions on identical benchmark inputs, records
 elapsed time, and evaluates every output with
-[evaluate_spatial_refinement()].
+[evaluate_spatial_refinement()]. The same `xy`, `labels`, and optional masks
+are used for each method so results are directly comparable.
 }
 \examples{
 sim <- simulate_spatial_domains(n = 500, pattern = "jagged_stripes", seed = 4)

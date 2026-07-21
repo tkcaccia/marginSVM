@@ -8,21 +8,23 @@ vignette: >
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.width = 8, fig.height = 3)
+knitr::opts_chunk$set(
+  collapse = TRUE, comment = "#>", fig.width = 8, fig.height = 3
+)
 library(fibermargin)
 ```
 
 ## Refine spatial labels
 
-FiberMargin takes coordinates and initial categorical labels. A specimen
-identifier is optional. The example contains four ordered areas whose reference
-classes are A, B, B, and C, with minority labels mixed into every area.
+FiberMargin refines observed categorical labels on spatial coordinates.
+`xy` is a 2D/3D coordinate matrix and `labels` are the observed classes.
+`samples` is optional and enables independent processing by specimen.
 
 ```{r refine}
 sim <- simulate_gradient_regions(
-  n = 2400,
-  minority = 0.25,
-  samples = 2,
+  n = 2400L,
+  minority = 0.10,
+  samples = 2L,
   density_profile = "strong",
   seed = 12
 )
@@ -31,7 +33,7 @@ refined <- refine_spatial_labels(
   xy = sim$xy,
   labels = sim$labels,
   samples = sim$samples,
-  workers = 1
+  workers = 1L
 )
 
 c(
@@ -40,23 +42,17 @@ c(
 )
 ```
 
-The method fixes its path atlas, central transport range, two-sided enclosure
-field, class adjustment, local-gap protection, and chart-dispersion allowance
-internally.
-Specimens are processed independently, so translating, rotating, or relabeling one
-specimen cannot affect another.
+The method is deterministic and uses one fixed internal rule set. Increasing
+`workers` enables parallel processing across specimens.
 
 ## Clean a categorical mask
 
-A regular 2D mask or 3D voxel array can be supplied directly. FiberMargin uses only
-array coordinates and categorical assignments; missing cells remain missing.
+For 2D masks and 3D arrays, missing cells are preserved in the output.
 
 ```{r clean-mask}
-reference_mask <- matrix(rep(c("background", "region"), each = 800), nrow = 40)
-noisy_mask <- corrupt_categorical_mask(
-  reference_mask, mechanism = "impulse", rate = 0.15, seed = 19
-)
-cleaned_mask <- clean_categorical_mask(noisy_mask, workers = 1)
+reference_mask <- matrix(rep(c("background", "region"), each = 800L), nrow = 40)
+noisy_mask <- corrupt_categorical_mask(reference_mask, mechanism = "impulse", rate = 0.15, seed = 19)
+cleaned_mask <- clean_categorical_mask(noisy_mask, workers = 1L)
 
 evaluate_mask_cleaning(reference_mask, noisy_mask, cleaned_mask)[, c(
   "initial_accuracy", "accuracy", "mean_iou", "mean_boundary_iou",
@@ -64,14 +60,14 @@ evaluate_mask_cleaning(reference_mask, noisy_mask, cleaned_mask)[, c(
 )]
 ```
 
-The mask evaluator verifies the exact identity
-`accuracy_gain = repaired_fraction - damaged_fraction`. This makes the correction
-benefit and harm to initially correct cells visible in the same result.
+`accuracy_gain` follows the exact identity
+`accuracy_gain = repaired_fraction - damaged_fraction`.
+Reporting both repair and damage avoids over-interpreting large gains from very aggressive updates.
 
 ## Visualize the correction
 
 ```{r spatial-plot, echo=FALSE, fig.cap="Reference regions, noisy input labels, and FiberMargin output for one specimen."}
-rows <- sim$samples == levels(sim$samples)[1]
+rows <- sim$samples == levels(sim$samples)[1L]
 palette <- c(A = "#0072B2", B = "#E69F00", C = "#009E73")
 old_par <- par(mfrow = c(1, 3), mar = c(1.5, 1.5, 2, 0.5))
 plot(sim$xy[rows, ], col = palette[sim$truth[rows]], pch = 16, cex = 0.45,
@@ -83,10 +79,7 @@ plot(sim$xy[rows, ], col = palette[refined[rows]], pch = 16, cex = 0.45,
 par(old_par)
 ```
 
-## Inspect decisions
-
-The output is a factor with the input levels. Diagnostics are attached to each
-location:
+## Inspect pointwise diagnostics
 
 ```{r diagnostics}
 head(data.frame(
@@ -96,17 +89,16 @@ head(data.frame(
   margin_score = attr(refined, "margin_score"),
   required = attr(refined, "required"),
   repair_margin = attr(refined, "repair_margin"),
+  atlas_dispersion = attr(refined, "atlas_dispersion"),
   changed = attr(refined, "changed")
 ))
 ```
 
-`margin_score` is an uncalibrated rival-versus-observed evidence contrast, not
-a probability or expected loss. A nonnegative `repair_margin` accepts a
-candidate that differs from the initial label.
-`atlas_dispersion` measures disagreement among deterministic spatial charts. It
-is not a sampling standard error or calibrated biological probability.
+`margin_score` is a local support contrast, and `repair_margin` is the margin above or
+below the local acceptance threshold. Positive `repair_margin` means the candidate was accepted.
+`atlas_dispersion` summarizes local route disagreement, and `changed` marks updated sites.
 
-## Evaluate refinement
+## Evaluate refinement quality
 
 ```{r evaluate}
 evaluate_spatial_refinement(
@@ -120,82 +112,71 @@ evaluate_spatial_refinement(
 )
 ```
 
-Accuracy and adjusted Rand index summarize overall recovery. Macro and
-worst-class recall expose imbalance; boundary and sparse-region accuracy score
-difficult spatial strata; correction recall records repaired errors; and damage
-records initially correct labels made wrong.
+Accuracy and ARI summarize global recovery.  
+`macro_recall` and `worst_recall` expose class imbalance robustness.  
+`boundary_accuracy` and `sparse_region_accuracy` inspect difficult spatial strata.  
+`correction_recall` and `damage_rate` describe how much the algorithm repairs versus damages.
 
 ## Create benchmark geometries
 
-All simulators return coordinates, noisy labels, reference labels, specimen IDs,
-and evaluation masks.
-
 ```{r simulation-catalogue, eval=FALSE}
 jagged <- simulate_spatial_domains(
-  n = 50000, pattern = "jagged_stripes", noise_type = "boundary",
-  density_profile = "extreme", seed = 1
+  n = 50000L, pattern = "jagged_stripes", noise_type = "boundary",
+  density_profile = "extreme", seed = 1L
 )
 gradient <- simulate_gradient_regions(
-  n = 50000, minority = 0.05, dimensions = 3, samples = 3, seed = 2
+  n = 50000L, minority = 0.05, dimensions = 3, samples = 3L, seed = 2L
 )
 tubes <- simulate_complex_spatial_domains(
-  n = 50000, shape = "tubular_network", density_profile = "extreme", seed = 3
+  n = 50000L, shape = "tubular_network", density_profile = "extreme", seed = 3L
 )
 volume <- simulate_volumetric_domains(
-  n = 50000, shape = "helical_channels", acquisition = "irregular_z", seed = 4
+  n = 50000L, shape = "helical_channels", acquisition = "irregular_z", seed = 4L
 )
 ```
 
-`benchmark_spatial_refiners()` times named methods on the same object. Its default
-method is FiberMargin.
-
 ```{r timed-benchmark, eval=FALSE}
-benchmark_spatial_refiners(jagged)
+benchmark_spatial_refiners(
+  jagged,
+  methods = list(
+    FiberMargin = refine_spatial_labels,
+    InitialOnly = function(xy, labels) labels
+  )
+)
 ```
 
 ## Use measured coordinates
 
-For a Seurat object, extract coordinates and pass the annotation vector directly.
+For a Seurat object:
 
 ```{r seurat, eval=FALSE}
-library(Seurat)
-
 xy <- GetTissueCoordinates(object)[, c("x", "y")]
 labels <- object$wsi_annotation_name
-object$fibermargin <- refine_spatial_labels(xy, labels)
+object$fibermargin <- refine_spatial_labels(xy, labels, workers = 2L)
 ```
 
-For several sections, concatenate their coordinates and labels and pass a
-matching section identifier:
+For multiple specimens, concatenate arrays and pass a matching specimen identifier:
 
 ```{r multiple-specimens, eval=FALSE}
 refined <- refine_spatial_labels(
   xy = coordinates,
   labels = initial_labels,
   samples = section_id,
-  workers = 4
+  workers = 4L
 )
 ```
 
-The package bundles compact DLPFC and CRC Visium HD coordinate/annotation benchmarks.
-CRC denotes colorectal cancer. The CRC derivative is CC BY 4.0 and excludes expression
-counts and imagery.
-The processed MERFISH annotation remains external because its redistribution terms
-are not explicit.
-
 ```{r real-benchmark}
 available_spatial_benchmarks()
-dlpfc <- load_spatial_benchmark("dlpfc", scenario = 1)
-c(spots = nrow(dlpfc$xy), sections = nlevels(dlpfc$samples))
-
+dlpfc <- load_spatial_benchmark("dlpfc", scenario = 1L)
 crc <- load_spatial_benchmark("crc", scenario = "CRC_random_25_r1")
-c(spots = nrow(crc$xy), classes = nlevels(crc$truth))
+c(spots = nrow(dlpfc$xy), dlpfc_sections = nlevels(dlpfc$samples))
+c(spots = nrow(crc$xy), crc_classes = nlevels(crc$truth))
 ```
 
-## Interpret the limit
+## Scope
 
-Coordinates and one observed label cannot identify every error. A coherently
-swapped region can be observationally indistinguishable from a genuine region.
-FiberMargin is therefore evaluated as a selective refiner, not an annotation
-oracle, and performance must be reported together with damage and weakest-class
-behavior.
+FiberMargin is a selective refiner with noisy-label inputs only.
+Coherent label swaps that keep the same boundary geometry are not observable from
+coordinates alone, so accuracy should be interpreted together with `damage_rate`
+and class-wise recall behavior.

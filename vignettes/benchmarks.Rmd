@@ -14,100 +14,97 @@ library(fibermargin)
 
 ## Evaluation contract
 
-FiberMargin is evaluated as a coordinate-and-label repair operator. Each method
-receives a coordinate matrix, one observed categorical field, and optional
-specimen identifiers. Reference annotations are used only after repair to score
-controlled corruptions. Accuracy and adjusted Rand index (ARI) are primary;
-correction recall and damage describe how aggressively a method edits the input.
+FiberMargin is evaluated as a coordinate-and-label repair operator.
+Each method receives:
 
-The predefined real-coordinate protocols contain 60 corruptions of a 19-class CRC
-Visium HD annotation and 45 corruptions over five consecutive MERFISH planes.
-Each protocol preserves at least one observed exemplar of every reference class.
-The direct fixed controls are alpha-expansion Potts, a coordinate CRF, harmonic
-propagation, multiscale mode filtering, Potts-like ICM, fixed SpaGCN and GraphST
-correction rules, and an 8-nearest-neighbour modal filter.
+- coordinates (`xy`),
+- one observed categorical field (`labels`),
+- optional specimen identifiers (`samples`),
+- optional evaluation masks (`boundary`, `sparse`, `regions`).
 
-| Dataset | Units | FiberMargin accuracy | FiberMargin ARI | Best accuracy | Best ARI |
-|:--|--:|--:|--:|:--|:--|
-| CRC | 60 | 0.8600 | 0.7812 | 0.8604 (Multiscale) | 0.7827 (Multiscale) |
-| MERFISH | 45 | 0.8886 | 0.7951 | 0.8843 (Alpha-expansion Potts) | 0.7888 (Alpha-expansion Potts) |
+Reference labels are only used after refinement for scoring.
+Primary metrics are:
 
-The complete per-case ledgers, control configuration, stored-input identities,
-and run manifests are in
-`benchmarks/results/fibermargin_final_enclosure_real_matrix_v2/`. These are
-controlled label-recovery results; repeated corruptions of one annotation are
-not independent biological specimens.
+- `accuracy` and `ari`,
+- `correction_recall` (recovered errors),
+- `damage_rate` (introduced errors),
+- `worst_recall` (min class recall),
+- `boundary_accuracy` and `sparse_region_accuracy`.
 
-## Report all outcomes
+```{r real-summary}
+available_spatial_benchmarks()
+```
 
-The exported evaluator reports primary accuracy and ARI together with boundary,
-sparse-region, and worst-class performance, correction recall, and damage.
+For bundled benchmarks, this package stores corrupted scenarios for DLPFC and CRC
+with reproducible recipes and metadata in object-level `design` tables.
+`load_spatial_benchmark()` returns a `spatial_refinement_benchmark`, ready for use
+with `benchmark_spatial_refiners()`.
 
-```{r evaluation, eval=FALSE}
+```{r scenario-sanity, eval=FALSE}
+dlpfc <- load_spatial_benchmark("dlpfc", scenario = 1L)
+crc <- load_spatial_benchmark("crc", scenario = "CRC_random_25_r1")
+c(dlpfc_n = nrow(dlpfc$xy), dlpfc_sections = nlevels(dlpfc$samples))
+c(crc_n = nrow(crc$xy), crc_classes = nlevels(crc$truth))
+```
+
+## One benchmark run
+
+```{r simple-benchmark, eval=FALSE}
 sim <- simulate_spatial_domains(
-  n = 50000,
-  pattern = "jagged_stripes",
-  noise_type = "boundary",
-  density_profile = "extreme",
-  seed = 7
+  n = 50000L, pattern = "jagged_stripes", noise_type = "boundary",
+  density_profile = "extreme", seed = 7L
 )
 
-refined <- refine_spatial_labels(sim$xy, sim$labels, sim$samples, workers = 4)
-evaluate_spatial_refinement(
-  truth = sim$truth,
-  initial = sim$labels,
-  refined = refined,
-  boundary = sim$boundary,
-  sparse = sim$sparse,
-  method = "FiberMargin"
+results <- benchmark_spatial_refiners(
+  sim,
+  methods = list(
+    FiberMargin = refine_spatial_labels
+  ),
+  include_initial = TRUE
 )
 ```
 
-`damage_rate` is the fraction of initially correct labels made incorrect by
-repair. It complements `correction_recall`, the fraction of initially incorrect
-labels recovered. A method with a high correction recall can still reduce
-accuracy if it damages too many correct labels.
+```{r quick-result, eval=FALSE}
+results
+```
+
+Run this block to inspect the benchmark output generated on your machine.
+For full protocol numbers, run the scripts in `benchmarks/` that generate the
+comparison tables used in the manuscript.
 
 ## Stress-test geometries
 
-The package exposes planar, gradient, complex-shape, and volumetric simulators.
-They return coordinates, the observed labels, evaluation-only truth, specimen
-membership, and boundary/sparse masks, so every method can be scored under the
-same conditions.
-
 ```{r simulation-catalogue, eval=FALSE}
 jagged <- simulate_spatial_domains(
-  n = 50000, pattern = "jagged_stripes", noise_type = "boundary",
-  density_profile = "extreme", seed = 1
+  n = 50000L, pattern = "jagged_stripes", noise_type = "boundary",
+  density_profile = "extreme", seed = 1L
 )
 gradient <- simulate_gradient_regions(
-  n = 50000, minority = 0.05, dimensions = 3, samples = 3, seed = 2
+  n = 50000L, minority = 0.05, dimensions = 3, samples = 3L, seed = 2L
 )
 tubes <- simulate_complex_spatial_domains(
-  n = 50000, shape = "tubular_network", density_profile = "extreme", seed = 3
+  n = 50000L, shape = "tubular_network", density_profile = "extreme", seed = 3L
 )
 volume <- simulate_volumetric_domains(
-  n = 50000, shape = "helical_channels", acquisition = "irregular_z", seed = 4
+  n = 50000L, shape = "helical_channels", acquisition = "irregular_z", seed = 4L
 )
 ```
 
-`benchmark_spatial_refiners()` applies named repair functions to one simulated
-object with the same evaluation masks. Its default is FiberMargin.
+`benchmark_spatial_refiners()` is suitable for direct, apples-to-apples
+comparisons across these geometries because all returned masks and diagnostics are
+scored against the same `truth`, `boundary`, and sparse-region masks.
 
 ```{r benchmark-api, eval=FALSE}
 benchmark_spatial_refiners(jagged)
 ```
 
-## Reproduce the fixed analyses
-
-The scripts below reproduce the direct matrix and the focused mechanism and
-component audits on the stored input fields.
+## Reproducible scripts
 
 ```sh
-Rscript benchmarks/reconcile_isolation_guard_real_matrix.R
-Rscript benchmarks/audit_two_sided_enclosure_real.R
-Rscript benchmarks/audit_fibermargin_component_reduction_real.R
+Rscript benchmarks/run_publication_benchmarks.R
+Rscript benchmarks/run_fibermargin_publication_benchmarks.R
+Rscript benchmarks/run_general_mask_repair_benchmarks.R
 ```
 
-Use `R_LIBS_USER` to point these commands to the tested local package library
-when working from a source checkout.
+These scripts create full result matrices, summary tables, and plotting assets used in
+the paper workflow.

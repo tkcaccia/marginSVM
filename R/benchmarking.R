@@ -1,7 +1,9 @@
 #' Construct a spatial refinement benchmark
 #'
-#' Creates the common data structure used by the simulation, evaluation, and
-#' benchmarking functions in fibermargin.
+#' Creates a validated benchmark object that is consumed by simulations,
+#' refinement runs, and benchmarking utilities. All fields are aligned by spot
+#' index, so every function in the package sees the same coordinates,
+#' labels, and optional evaluation masks.
 #'
 #' @param xy Numeric matrix containing two or three spatial coordinates per
 #'   observation.
@@ -9,9 +11,9 @@
 #' @param truth Reference assignments used only for evaluation.
 #' @param samples Optional tissue or section identifier.
 #' @param boundary Optional logical vector marking boundary observations.
-#' @param regions Optional region identifier used to identify the sparsest and
-#'   densest regions.
-#' @param sparse Optional logical vector marking observations in sparse regions.
+#' @param regions Optional region identifier used for defining sparse-versus-dense
+#'   accuracy when `sparse` is not supplied.
+#' @param sparse Optional logical vector marking a user-provided sparse subset.
 #' @param name Optional benchmark name.
 #' @param metadata Optional named list with provenance or scenario information.
 #'
@@ -77,9 +79,9 @@ spatial_benchmark <- function(xy, labels, truth, samples = NULL,
 
 #' Evaluate a spatial label refinement
 #'
-#' Computes complementary measures of label recovery, class balance, boundary
-#' behavior, sparse-region behavior, and unintended damage. All measures compare
-#' a refined assignment with a fixed reference and the same initial assignment.
+#' Computes primary and failure-mode metrics for label repair. Returned measures
+#' include recovery (accuracy and adjusted Rand index), class imbalance robustness
+#' (macro and worst recall), boundary/sparse reliability, and damage.
 #'
 #' @param truth Reference assignments.
 #' @param initial Initial noisy assignments.
@@ -92,12 +94,12 @@ spatial_benchmark <- function(xy, labels, truth, samples = NULL,
 #' @param method Optional method name included in the returned row.
 #'
 #' @details
-#' `correction_recall` is the fraction of initially wrong labels repaired.
-#' `damage_rate` is the fraction of initially correct labels made wrong.
-#' `changed_precision` is the fraction of changed labels that are correct after
-#' refinement. Empty strata are reported as `NA` rather than silently scored as
-#' zero. Adjusted Rand index is calculated internally and does not require an
-#' additional package.
+#' `correction_recall` is the fraction of initially incorrect labels that are
+#' repaired. `damage_rate` is the fraction of initially correct labels that are
+#' flipped to an incorrect label. `changed_precision` is the fraction of
+#' modified sites that are correct after refinement. Empty strata are reported as
+#' `NA` rather than imputed as zero. Adjusted Rand index is calculated directly
+#' from the vectors and does not require an external package.
 #'
 #' @return A one-row data frame containing the evaluation measures.
 #' @export
@@ -197,7 +199,8 @@ evaluate_spatial_refinement <- function(truth, initial, refined,
 #'
 #' Runs one or more refinement functions on identical benchmark inputs, records
 #' elapsed time, and evaluates every output with
-#' [evaluate_spatial_refinement()].
+#' [evaluate_spatial_refinement()]. The same `xy`, `labels`, and optional masks
+#' are used for each method so results are directly comparable.
 #'
 #' @param data A benchmark object returned by a fibermargin simulator or
 #'   [spatial_benchmark()], or a named list of such objects.
@@ -207,7 +210,7 @@ evaluate_spatial_refinement <- function(truth, initial, refined,
 #' @param include_initial Include the unrefined assignment as method `Initial`.
 #' @param seed Integer seed reset before each method run.
 #' @param on_error Either `"stop"` or `"record"`. The latter returns an `error`
-#'   column and `NA` performance measures for a failed method.
+#'   column and `NA` performance values for a failed method rather than aborting.
 #'
 #' @return A data frame with one row per dataset and method.
 #' @export

@@ -2,9 +2,8 @@
 #'
 #' `clean_categorical_mask()` applies FiberMargin directly to a two-dimensional
 #' pixel mask or three-dimensional voxel mask. Missing cells are ignored and
-#' restored as missing in the result. The method uses only array coordinates
-#' and the supplied categorical assignments; it does not use image intensities,
-#' model logits, or reference labels.
+#' returned unchanged. The repair uses only voxel coordinates and label values
+#' (no image intensities, model logits, or reference annotations).
 #'
 #' @param mask A categorical matrix or three-dimensional array. Numeric,
 #'   character, logical, and factor masks are supported. Missing cells are
@@ -12,16 +11,14 @@
 #' @param samples Optional matrix or array with the same dimensions as `mask`.
 #'   Different sample identifiers are cleaned independently.
 #' @param workers Optional CPU budget used across samples and independent
-#'   spatial charts. `NULL` chooses up to four physical cores.
+#'   spatial charts. `NULL` uses up to four physical cores when possible.
 #'
 #' @return A cleaned mask with the dimensions, dimnames, storage type, and void
 #'   locations of `mask`. Pointwise arrays are attached as attributes
 #'   `candidate`, `margin_score`, `required`, `repair_margin`,
 #'   `atlas_dispersion`, `isolation`, and `changed`.
-#'   `margin_score` is an
-#'   uncalibrated evidence contrast, not a probability or expected loss.
-#'   Larger `repair_margin` means stronger evidence for the candidate relative
-#'   to the implemented change barrier.
+#'   `margin_score` is a local support contrast on the mask lattice, while
+#'   `repair_margin` is the evidence gap above the local acceptance threshold.
 #' @export
 #' @examples
 #' mask <- matrix(c(rep("A", 50), rep("B", 50)), nrow = 10)
@@ -218,12 +215,8 @@ corrupt_categorical_mask <- function(
 #' Evaluate categorical mask cleaning
 #'
 #' Evaluates a cleaned mask against a fixed reference and its imperfect input.
-#' In addition to accuracy and damage-aware refinement metrics, the function
-#' reports multiclass intersection-over-union and automatically identifies
-#' reference boundaries and the rarest reference class. `mean_boundary_iou`
-#' is a one-grid-step multiclass version of Boundary IoU: for each class it
-#' compares the class pixels adjacent to a class transition in the reference
-#' and cleaned masks, then averages over classes with a non-empty boundary union.
+#' In addition to correction and damage metrics, the function reports overlap,
+#' class-aware boundary agreement, and rare-class behavior.
 #'
 #' @param reference Reference categorical matrix or three-dimensional array.
 #' @param initial Imperfect mask supplied to the cleaning method.
